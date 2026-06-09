@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>請求書デモ | Static Invoice Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #1f2a37;
+    --muted: #667085;
+    --line: #d9dee7;
+    --paper: #ffffff;
+    --canvas: #f4efe6;
+    --brand: #184a45;
+    --accent: #bf7a2b;
+    --chip: #eef3f1;
+  }
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at top left, rgba(191, 122, 43, 0.12), transparent 30%),
+      linear-gradient(180deg, #f8f4ed 0%, #fbfaf8 100%);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    border-bottom: 1px solid rgba(24, 74, 69, 0.12);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .header-inner,
+  .hero,
+  .main {
+    width: min(1120px, calc(100% - 32px));
+    margin: 0 auto;
+  }
+  .header-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 0;
+    gap: 16px;
+  }
+  .brand-kicker {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 22px;
+    color: var(--brand);
+  }
+  .header-note {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .hero {
+    padding: 40px 0 28px;
+  }
+  .hero-panel {
+    background: linear-gradient(135deg, rgba(24, 74, 69, 0.96), rgba(23, 39, 64, 0.92));
+    color: white;
+    border-radius: 24px;
+    padding: 28px;
+    box-shadow: 0 24px 60px rgba(31, 42, 55, 0.16);
+  }
+  .hero-panel p {
+    max-width: 760px;
+    font-size: 14px;
+    opacity: 0.9;
+    margin-top: 10px;
+  }
+  .hero-panel h2 {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 30px;
+    line-height: 1.4;
+  }
+  .main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+    padding: 0 0 48px;
+  }
+  .panel {
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(24, 74, 69, 0.08);
+    border-radius: 20px;
+    box-shadow: 0 18px 40px rgba(31, 42, 55, 0.08);
+  }
+  .sidebar {
+    padding: 20px;
+    align-self: start;
+    position: sticky;
+    top: 92px;
+  }
+  .section-title {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .summary-card {
+    background: var(--canvas);
+    border-radius: 14px;
+    padding: 14px;
+  }
+  .summary-card .label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .summary-card .value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--brand);
+  }
+  .status-box {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    padding: 14px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid var(--line);
+  }
+  .customer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .customer-button {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: white;
+    padding: 14px;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .customer-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(24, 74, 69, 0.36);
+    box-shadow: 0 8px 22px rgba(31, 42, 55, 0.08);
+  }
+  .customer-button.active {
+    border-color: var(--brand);
+    background: #f5faf8;
+  }
+  .customer-button .name {
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .customer-button .meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .content {
+    padding: 24px;
+  }
+  .empty-state {
+    min-height: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--muted);
+    padding: 32px;
+  }
+  .invoice-sheet {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .invoice-header {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 24px;
+    padding: 28px 28px 24px;
+    border-bottom: 1px solid var(--line);
+    background:
+      linear-gradient(180deg, rgba(24, 74, 69, 0.06), rgba(24, 74, 69, 0));
+  }
+  .invoice-kicker {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .invoice-title {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 30px;
+    color: var(--brand);
+    line-height: 1.3;
+    margin-bottom: 14px;
+  }
+  .invoice-recipient {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .invoice-subtext {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .invoice-meta {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.7);
+  }
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+  .meta-row .key {
+    color: var(--muted);
+  }
+  .meta-row .value {
+    font-weight: 600;
+    text-align: right;
+  }
+  .amount-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-top: 18px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    background: var(--brand);
+    color: white;
+  }
+  .amount-strip .label {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    opacity: 0.82;
+  }
+  .amount-strip .value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .invoice-body {
+    padding: 24px 28px 28px;
+  }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .chip {
+    background: var(--chip);
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 999px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 12px;
+  }
+  td.num, th.num {
+    text-align: right;
+  }
+  .totals {
+    width: min(360px, 100%);
+    margin-left: auto;
+    margin-top: 20px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .totals-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .totals-row:last-child {
+    border-bottom: none;
+  }
+  .totals-row.grand {
+    background: #f8fafc;
+    font-weight: 700;
+    color: var(--brand);
+    font-size: 15px;
+  }
+  .notes {
+    margin-top: 22px;
+    padding: 16px;
+    border-radius: 16px;
+    background: #fbfaf8;
+    border: 1px solid var(--line);
+  }
+  .notes h3 {
+    font-size: 13px;
+    margin-bottom: 8px;
+    color: var(--brand);
+  }
+  .notes p {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: pre-wrap;
+  }
+  .footer-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 18px;
+  }
+  @media (max-width: 960px) {
+    .main {
+      grid-template-columns: 1fr;
+    }
+    .sidebar {
+      position: static;
+    }
+    .invoice-header {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media print {
+    header, .hero, .sidebar {
+      display: none;
+    }
+    body {
+      background: white;
+    }
+    .main {
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .content {
+      padding: 0;
+    }
+    .panel,
+    .invoice-sheet {
+      box-shadow: none;
+      border: none;
+      border-radius: 0;
+    }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="brand-kicker">STATIC INVOICE DEMO</div>
+      <h1 id="site-title">請求書デモ</h1>
+    </div>
+    <div class="header-note" id="header-note">Google スプレッドシート公開 CSV または JSON を読み込みます。</div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-panel">
+    <div class="brand-kicker">PUBLIC DEMO</div>
+    <h2>GitHub Pages でそのまま配布できる<br>静的な請求書デモ雛形</h2>
+    <p id="hero-description">サンプルデータだけを公開し、本番版とは切り離して配布するためのスターターです。個人情報や実請求データは入れずにお使いください。</p>
+  </div>
+</section>
+
+<main class="main">
+  <aside class="panel sidebar">
+    <div class="section-title">SUMMARY</div>
+    <div class="summary-grid" id="summary-grid"></div>
+    <div class="status-box" id="status-box">請求データを読み込み中です。</div>
+    <div class="section-title">CUSTOMERS</div>
+    <div class="customer-list" id="customer-list"></div>
+  </aside>
+
+  <section class="panel content">
+    <div id="invoice-root" class="empty-state">請求先を選ぶと右側に請求書プレビューが表示されます。</div>
+  </section>
+</main>
+
+<script>
+  const defaultConfig = {
+    siteTitle: '請求書デモ',
+    headerNote: 'Google スプレッドシート公開 CSV または JSON を読み込みます。',
+    heroDescription: 'サンプルデータだけを公開し、本番版とは切り離して配布するためのスターターです。個人情報や実請求データは入れずにお使いください。',
+    invoiceSheetCsvUrl: '',
+    fallbackInvoicesUrl: './data/invoices.json',
+    issuerName: '介護美容サンプル事業所',
+    issuerAddress: '大阪府大阪市サンプル区 1-2-3',
+    issuerContact: '06-0000-0000',
+    bankNote: 'お振込期限は発行日から 14 日以内を目安にご案内ください。',
+    defaultTaxRate: 0.1,
+    currency: 'JPY'
+  };
+
+  const summaryGrid = document.getElementById('summary-grid');
+  const statusBox = document.getElementById('status-box');
+  const customerList = document.getElementById('customer-list');
+  const invoiceRoot = document.getElementById('invoice-root');
+  let currentConfig = { ...defaultConfig };
+  let currentGroups = [];
+  let selectedInvoiceId = '';
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function parseCsv(text) {
+    const rows = [];
+    let current = '';
+    let row = [];
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i += 1) {
+      const char = text[i];
+      const next = text[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && next === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        row.push(current);
+        current = '';
+      } else if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && next === '\n') {
+          i += 1;
+        }
+        row.push(current);
+        rows.push(row);
+        row = [];
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    if (current.length > 0 || row.length > 0) {
+      row.push(current);
+      rows.push(row);
+    }
+
+    return rows;
+  }
+
+  function normalizeHeader(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function csvToRecords(text) {
+    const rows = parseCsv(text).filter((row) => row.some((cell) => String(cell || '').trim() !== ''));
+    if (rows.length === 0) {
+      return [];
+    }
+    const headers = rows[0].map(normalizeHeader);
+    return rows.slice(1).map((row) => {
+      const record = {};
+      headers.forEach((header, index) => {
+        record[header] = String(row[index] || '').trim();
+      });
+      return record;
+    });
+  }
+
+  function parseBoolean(value, fallback) {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['true', '1', 'yes'].includes(normalized)) return true;
+    if (['false', '0', 'no'].includes(normalized)) return false;
+    return fallback;
+  }
+
+  function parseNumber(value, fallback = 0) {
+    const parsed = Number(String(value ?? '').replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function formatCurrency(value) {
+    return new Intl.NumberFormat('ja-JP', {
+      style: 'currency',
+      currency: currentConfig.currency || 'JPY',
+      maximumFractionDigits: 0
+    }).format(value);
+  }
+
+  function formatDate(dateText) {
+    if (!dateText) return '-';
+    const date = new Date(`${dateText}T00:00:00+09:00`);
+    if (Number.isNaN(date.getTime())) return escapeHtml(dateText);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${year}年${month}月${day}日`;
+  }
+
+  function loadConfig() {
+    return fetch('./data/invoices-site-config.json', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('config not found');
+        }
+        return response.json();
+      })
+      .then((config) => ({ ...defaultConfig, ...config }))
+      .catch(() => ({ ...defaultConfig }));
+  }
+
+  function loadInvoiceRecords(config) {
+    const csvUrl = String(config.invoiceSheetCsvUrl || '').trim();
+    if (csvUrl) {
+      return fetch(csvUrl, { cache: 'no-store' })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('csv fetch failed');
+          }
+          return response.text();
+        })
+        .then(csvToRecords)
+        .catch(() => loadFallbackRecords(config));
+    }
+    return loadFallbackRecords(config);
+  }
+
+  function loadFallbackRecords(config) {
+    return fetch(config.fallbackInvoicesUrl, { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('fallback fetch failed');
+        }
+        return response.json();
+      })
+      .then((data) => Array.isArray(data) ? data : [])
+      .catch(() => []);
+  }
+
+  function normalizeRecord(record) {
+    const invoiceId = String(record.invoiceId || record.invoiceid || '').trim();
+    const visible = parseBoolean(record.visible, true);
+    if (!invoiceId || !visible) {
+      return null;
+    }
+    return {
+      invoiceId,
+      customerCode: String(record.customerCode || record.customercode || '').trim(),
+      customerName: String(record.customerName || record.customername || '').trim(),
+      recipientName: String(record.recipientName || record.recipientname || '').trim(),
+      issueDate: String(record.issueDate || record.issuedate || '').trim(),
+      serviceDate: String(record.serviceDate || record.servicedate || '').trim(),
+      serviceName: String(record.serviceName || record.servicename || '').trim(),
+      quantity: parseNumber(record.quantity, 1),
+      unitPrice: parseNumber(record.unitPrice || record.unitprice, 0),
+      taxMode: String(record.taxMode || record.taxmode || 'included').trim().toLowerCase(),
+      isPaid: parseBoolean(record.isPaid || record.ispaid, false),
+      notes: String(record.notes || '').trim(),
+      visible
+    };
+  }
+
+  function groupInvoices(records) {
+    const groupsById = new Map();
+
+    records.map(normalizeRecord).filter(Boolean).forEach((record) => {
+      if (!groupsById.has(record.invoiceId)) {
+        groupsById.set(record.invoiceId, {
+          invoiceId: record.invoiceId,
+          customerCode: record.customerCode,
+          customerName: record.customerName,
+          recipientName: record.recipientName,
+          issueDate: record.issueDate,
+          isPaid: record.isPaid,
+          notes: record.notes,
+          lines: []
+        });
+      }
+
+      const group = groupsById.get(record.invoiceId);
+      group.lines.push({
+        serviceDate: record.serviceDate,
+        serviceName: record.serviceName,
+        quantity: record.quantity,
+        unitPrice: record.unitPrice,
+        taxMode: record.taxMode
+      });
+      group.isPaid = group.isPaid && record.isPaid;
+      if (!group.notes && record.notes) {
+        group.notes = record.notes;
+      }
+    });
+
+    return Array.from(groupsById.values()).sort((a, b) => {
+      return String(b.issueDate).localeCompare(String(a.issueDate), 'ja');
+    });
+  }
+
+  function calcLine(line) {
+    const subtotal = line.quantity * line.unitPrice;
+    if (line.taxMode === 'excluded') {
+      const tax = Math.round(subtotal * Number(currentConfig.defaultTaxRate || 0.1));
+      return { subtotal, tax, total: subtotal + tax };
+    }
+    const tax = Math.round(subtotal - subtotal / (1 + Number(currentConfig.defaultTaxRate || 0.1)));
+    return { subtotal, tax, total: subtotal };
+  }
+
+  function summarize(groups) {
+    const stats = {
+      invoiceCount: groups.length,
+      customerCount: new Set(groups.map((group) => group.customerCode || group.customerName)).size,
+      unpaidCount: groups.filter((group) => !group.isPaid).length
+    };
+
+    const totalAmount = groups.reduce((sum, group) => {
+      return sum + group.lines.reduce((groupSum, line) => groupSum + calcLine(line).total, 0);
+    }, 0);
+
+    return { ...stats, totalAmount };
+  }
+
+  function renderSummary(groups) {
+    const summary = summarize(groups);
+    summaryGrid.innerHTML = `
+      <div class="summary-card">
+        <div class="label">請求書</div>
+        <div class="value">${summary.invoiceCount}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">請求総額</div>
+        <div class="value">${escapeHtml(formatCurrency(summary.totalAmount))}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">顧客数</div>
+        <div class="value">${summary.customerCount}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">未入金</div>
+        <div class="value">${summary.unpaidCount}</div>
+      </div>
+    `;
+  }
+
+  function renderCustomerList(groups) {
+    if (!groups.length) {
+      customerList.innerHTML = '<div class="status-box">表示できる請求データがありません。</div>';
+      return;
+    }
+
+    customerList.innerHTML = groups.map((group) => {
+      const total = group.lines.reduce((sum, line) => sum + calcLine(line).total, 0);
+      const active = group.invoiceId === selectedInvoiceId ? 'active' : '';
+      return `
+        <button class="customer-button ${active}" type="button" data-invoice-id="${escapeHtml(group.invoiceId)}">
+          <div class="name">${escapeHtml(group.recipientName || group.customerName || group.invoiceId)}</div>
+          <div class="meta">${escapeHtml(group.issueDate)} / ${escapeHtml(formatCurrency(total))} / ${group.isPaid ? '入金済' : '未入金'}</div>
+        </button>
+      `;
+    }).join('');
+
+    customerList.querySelectorAll('[data-invoice-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedInvoiceId = button.getAttribute('data-invoice-id') || '';
+        renderCustomerList(currentGroups);
+        renderInvoice(currentGroups.find((group) => group.invoiceId === selectedInvoiceId) || null);
+      });
+    });
+  }
+
+  function renderInvoice(group) {
+    if (!group) {
+      invoiceRoot.className = 'empty-state';
+      invoiceRoot.innerHTML = '請求先を選ぶと右側に請求書プレビューが表示されます。';
+      return;
+    }
+
+    const linesHtml = group.lines.map((line) => {
+      const amounts = calcLine(line);
+      return `
+        <tr>
+          <td>${escapeHtml(formatDate(line.serviceDate))}</td>
+          <td>${escapeHtml(line.serviceName)}</td>
+          <td class="num">${escapeHtml(String(line.quantity))}</td>
+          <td class="num">${escapeHtml(formatCurrency(line.unitPrice))}</td>
+          <td>${line.taxMode === 'excluded' ? '外税' : '内税'}</td>
+          <td class="num">${escapeHtml(formatCurrency(amounts.total))}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const totals = group.lines.reduce((acc, line) => {
+      const amounts = calcLine(line);
+      acc.subtotal += amounts.subtotal;
+      acc.tax += amounts.tax;
+      acc.total += amounts.total;
+      return acc;
+    }, { subtotal: 0, tax: 0, total: 0 });
+
+    invoiceRoot.className = '';
+    invoiceRoot.innerHTML = `
+      <article class="invoice-sheet">
+        <div class="invoice-header">
+          <div>
+            <div class="invoice-kicker">INVOICE PREVIEW</div>
+            <div class="invoice-title">ご請求書</div>
+            <div class="invoice-recipient">${escapeHtml(group.recipientName || group.customerName || '請求先未設定')}</div>
+            <div class="invoice-subtext">${escapeHtml(group.customerName || '')}</div>
+            <div class="amount-strip">
+              <div>
+                <div class="label">TOTAL DUE</div>
+                <div class="value">${escapeHtml(formatCurrency(totals.total))}</div>
+              </div>
+              <div>${group.isPaid ? '入金済' : '未入金'}</div>
+            </div>
+          </div>
+          <div class="invoice-meta">
+            <div class="meta-row"><span class="key">請求番号</span><span class="value">${escapeHtml(group.invoiceId)}</span></div>
+            <div class="meta-row"><span class="key">発行日</span><span class="value">${escapeHtml(formatDate(group.issueDate))}</span></div>
+            <div class="meta-row"><span class="key">顧客コード</span><span class="value">${escapeHtml(group.customerCode || '-')}</span></div>
+            <div class="meta-row"><span class="key">発行元</span><span class="value">${escapeHtml(currentConfig.issuerName)}</span></div>
+            <div class="meta-row"><span class="key">住所</span><span class="value">${escapeHtml(currentConfig.issuerAddress)}</span></div>
+            <div class="meta-row"><span class="key">連絡先</span><span class="value">${escapeHtml(currentConfig.issuerContact)}</span></div>
+          </div>
+        </div>
+        <div class="invoice-body">
+          <div class="chip-row">
+            <span class="chip">${group.isPaid ? '入金済' : '未入金'}</span>
+            <span class="chip">${group.lines.length} 明細</span>
+            <span class="chip">税率 ${Math.round(Number(currentConfig.defaultTaxRate || 0.1) * 100)}%</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>施術日</th>
+                <th>内容</th>
+                <th class="num">数量</th>
+                <th class="num">単価</th>
+                <th>税区分</th>
+                <th class="num">金額</th>
+              </tr>
+            </thead>
+            <tbody>${linesHtml}</tbody>
+          </table>
+          <div class="totals">
+            <div class="totals-row"><span>税抜小計</span><span>${escapeHtml(formatCurrency(totals.subtotal))}</span></div>
+            <div class="totals-row"><span>消費税</span><span>${escapeHtml(formatCurrency(totals.tax))}</span></div>
+            <div class="totals-row grand"><span>ご請求額</span><span>${escapeHtml(formatCurrency(totals.total))}</span></div>
+          </div>
+          <div class="notes">
+            <h3>備考</h3>
+            <p>${escapeHtml(group.notes || currentConfig.bankNote || '')}</p>
+          </div>
+          <div class="footer-note">このページは GitHub Pages でそのまま公開できる静的プレビューです。実データは公開しない運用をおすすめします。</div>
+        </div>
+      </article>
+    `;
+  }
+
+  async function init() {
+    currentConfig = await loadConfig();
+    document.title = `${currentConfig.siteTitle} | Static Invoice Demo`;
+    document.getElementById('site-title').textContent = currentConfig.siteTitle;
+    document.getElementById('header-note').textContent = currentConfig.headerNote;
+    document.getElementById('hero-description').textContent = currentConfig.heroDescription;
+
+    const records = await loadInvoiceRecords(currentConfig);
+    currentGroups = groupInvoices(records);
+    selectedInvoiceId = currentGroups[0]?.invoiceId || '';
+
+    renderSummary(currentGroups);
+    renderCustomerList(currentGroups);
+    renderInvoice(currentGroups.find((group) => group.invoiceId === selectedInvoiceId) || null);
+
+    statusBox.textContent = currentGroups.length
+      ? `請求書 ${currentGroups.length} 件を表示しています。CSV URL を設定すると Google スプレッドシートを優先して読み込みます。`
+      : '表示できる請求データがありません。data/invoices.json または invoices-site-config.json を確認してください。';
+  }
+
+  init();
+</script>
+</body>
+</html>

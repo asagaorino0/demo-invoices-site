@@ -1,0 +1,13 @@
+{
+  "siteTitle": "請求書デモ",
+  "headerNote": "Google スプレッドシート公開 CSV または data/invoices.json を読み込みます。",
+  "heroDescription": "matsuba-commits 版と同じく、GitHub Pages にそのまま置ける静的配布向けの雛形です。public 版はサンプルデータだけで運用してください。",
+  "invoiceSheetCsvUrl": "",
+  "fallbackInvoicesUrl": "./data/invoices.json",
+  "issuerName": "介護美容サンプル事業所",
+  "issuerAddress": "大阪府大阪市サンプル区 1-2-3",
+  "issuerContact": "06-0000-0000",
+  "bankNote": "お振込期限は発行日から 14 日以内を目安にご案内ください。public 版には実データを入れないでください。",
+  "defaultTaxRate": 0.1,
+  "currency": "JPY"
+}

@@ -1,0 +1,4 @@
+invoiceId,customerCode,customerName,recipientName,issueDate,serviceDate,serviceName,quantity,unitPrice,taxMode,isPaid,notes,visible
+sample-001,C001,山田 花子,さくら介護施設 御中,2026-06-01,2026-05-28,フットケア,1,8000,included,FALSE,初回デモデータ,TRUE
+sample-002,C001,山田 花子,さくら介護施設 御中,2026-06-01,2026-05-28,ハンドケア,1,5000,included,FALSE,同日追加施術,TRUE
+sample-003,C002,佐藤 一郎,ひまわりホーム 御中,2026-06-01,2026-05-30,ケアメイク,1,12000,excluded,TRUE,入金済みサンプル,TRUE

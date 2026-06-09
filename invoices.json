@@ -1,0 +1,47 @@
+[
+  {
+    "invoiceId": "sample-001",
+    "customerCode": "C001",
+    "customerName": "山田 花子",
+    "recipientName": "さくら介護施設 御中",
+    "issueDate": "2026-06-01",
+    "serviceDate": "2026-05-28",
+    "serviceName": "フットケア",
+    "quantity": 1,
+    "unitPrice": 8000,
+    "taxMode": "included",
+    "isPaid": false,
+    "notes": "初回デモデータです。支払期限や振込先案内などをここに記載できます。",
+    "visible": true
+  },
+  {
+    "invoiceId": "sample-001",
+    "customerCode": "C001",
+    "customerName": "山田 花子",
+    "recipientName": "さくら介護施設 御中",
+    "issueDate": "2026-06-01",
+    "serviceDate": "2026-05-28",
+    "serviceName": "ハンドケア",
+    "quantity": 1,
+    "unitPrice": 5000,
+    "taxMode": "included",
+    "isPaid": false,
+    "notes": "",
+    "visible": true
+  },
+  {
+    "invoiceId": "sample-003",
+    "customerCode": "C002",
+    "customerName": "佐藤 一郎",
+    "recipientName": "ひまわりホーム 御中",
+    "issueDate": "2026-06-01",
+    "serviceDate": "2026-05-30",
+    "serviceName": "ケアメイク",
+    "quantity": 1,
+    "unitPrice": 12000,
+    "taxMode": "excluded",
+    "isPaid": true,
+    "notes": "入金済みサンプルです。",
+    "visible": true
+  }
+]
