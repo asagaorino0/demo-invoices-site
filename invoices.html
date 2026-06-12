@@ -5,138 +5,177 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>請求書デモ | Static Invoice Demo</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --ink: #1f2a37;
-    --muted: #667085;
-    --line: #d9dee7;
+    --ink: #2c1b2c;
+    --muted: #7c6875;
+    --line: #e8dce4;
     --paper: #ffffff;
-    --canvas: #f4efe6;
-    --brand: #184a45;
-    --accent: #bf7a2b;
-    --chip: #eef3f1;
+    --canvas: #f7edf3;
+    --canvas-deep: #f1e1ea;
+    --brand: #96155f;
+    --brand-dark: #5f143b;
+    --brand-soft: #f8e9f1;
+    --surface: rgba(255, 251, 253, 0.92);
+    --shadow: 0 24px 64px rgba(73, 28, 53, 0.16);
+  }
+  html, body {
+    min-height: 100%;
   }
   body {
     font-family: 'Noto Sans JP', sans-serif;
     color: var(--ink);
     background:
-      radial-gradient(circle at top left, rgba(191, 122, 43, 0.12), transparent 30%),
-      linear-gradient(180deg, #f8f4ed 0%, #fbfaf8 100%);
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.7), transparent 34%),
+      linear-gradient(180deg, #e9d7e0 0%, #f4e7ee 50%, #f9f1f5 100%);
     line-height: 1.6;
-    min-height: 100vh;
+    padding: 24px 12px;
   }
-  header {
-    border-bottom: 1px solid rgba(24, 74, 69, 0.12);
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(12px);
-    position: sticky;
-    top: 0;
-    z-index: 10;
+  button,
+  input,
+  textarea {
+    font: inherit;
   }
-  .header-inner,
-  .hero,
-  .main {
-    width: min(1120px, calc(100% - 32px));
+  .app-shell {
+    width: min(1320px, 100%);
     margin: 0 auto;
   }
-  .header-inner {
+  .dialog-shell {
+    background: var(--surface);
+    border: 1px solid rgba(150, 21, 95, 0.12);
+    border-radius: 28px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(12px);
+    overflow: hidden;
+  }
+  .dialog-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 18px 0;
-    gap: 16px;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 24px 28px 18px;
+    border-bottom: 1px solid rgba(150, 21, 95, 0.08);
   }
   .brand-kicker {
     font-size: 11px;
-    letter-spacing: 0.22em;
-    color: var(--accent);
+    letter-spacing: 0.24em;
+    color: var(--brand);
     margin-bottom: 6px;
   }
   h1 {
     font-family: 'Noto Serif JP', serif;
-    font-size: 22px;
-    color: var(--brand);
+    font-size: 28px;
+    line-height: 1.2;
+    color: var(--brand-dark);
   }
   .header-note {
+    max-width: 440px;
     font-size: 12px;
     color: var(--muted);
     text-align: right;
   }
-  .hero {
-    padding: 40px 0 28px;
-  }
-  .hero-panel {
-    background: linear-gradient(135deg, rgba(24, 74, 69, 0.96), rgba(23, 39, 64, 0.92));
-    color: white;
-    border-radius: 24px;
-    padding: 28px;
-    box-shadow: 0 24px 60px rgba(31, 42, 55, 0.16);
-  }
-  .hero-panel p {
-    max-width: 760px;
-    font-size: 14px;
-    opacity: 0.9;
-    margin-top: 10px;
-  }
-  .hero-panel h2 {
-    font-family: 'Noto Serif JP', serif;
-    font-size: 30px;
-    line-height: 1.4;
-  }
-  .main {
+  .dialog-body {
     display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 24px;
-    padding: 0 0 48px;
-  }
-  .panel {
-    background: rgba(255, 255, 255, 0.88);
-    border: 1px solid rgba(24, 74, 69, 0.08);
-    border-radius: 20px;
-    box-shadow: 0 18px 40px rgba(31, 42, 55, 0.08);
+    grid-template-columns: 300px minmax(0, 1fr);
+    min-height: 760px;
   }
   .sidebar {
-    padding: 20px;
-    align-self: start;
-    position: sticky;
-    top: 92px;
+    padding: 22px 18px 26px;
+    border-right: 1px solid rgba(150, 21, 95, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(253, 246, 250, 0.96));
+  }
+  .content {
+    padding: 18px 22px 28px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 249, 252, 0.98));
   }
   .section-title {
-    font-size: 12px;
-    letter-spacing: 0.14em;
-    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--brand);
     margin-bottom: 12px;
   }
   .summary-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 16px;
   }
   .summary-card {
-    background: var(--canvas);
-    border-radius: 14px;
-    padding: 14px;
+    background: white;
+    border: 1px solid rgba(150, 21, 95, 0.08);
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: 0 8px 20px rgba(73, 28, 53, 0.05);
   }
   .summary-card .label {
     font-size: 11px;
     color: var(--muted);
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
   .summary-card .value {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 700;
-    color: var(--brand);
+    color: var(--brand-dark);
   }
   .status-box {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--muted);
-    margin-bottom: 20px;
-    padding: 14px;
+    margin-bottom: 18px;
+    padding: 12px 14px;
     border-radius: 14px;
-    background: #f8fafc;
-    border: 1px solid var(--line);
+    background: var(--brand-soft);
+    border: 1px solid rgba(150, 21, 95, 0.08);
+  }
+  .source-card {
+    margin-bottom: 18px;
+    padding: 14px;
+    border-radius: 16px;
+    background: white;
+    border: 1px solid rgba(150, 21, 95, 0.08);
+    box-shadow: 0 8px 20px rgba(73, 28, 53, 0.05);
+  }
+  .source-label {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--brand);
+    margin-bottom: 8px;
+  }
+  .source-actions {
+    display: grid;
+    gap: 10px;
+  }
+  .source-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    border: 1px solid rgba(150, 21, 95, 0.12);
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff, #fff8fb);
+    color: var(--brand-dark);
+    padding: 10px 12px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .source-button input {
+    display: none;
+  }
+  .source-meta {
+    font-size: 12px;
+    color: var(--muted);
+    word-break: break-word;
+  }
+  .source-clear {
+    border: none;
+    background: transparent;
+    color: var(--brand);
+    text-align: left;
+    cursor: pointer;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 700;
   }
   .customer-list {
     display: flex;
@@ -146,36 +185,354 @@
   .customer-button {
     width: 100%;
     text-align: left;
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    border: 1px solid rgba(150, 21, 95, 0.1);
+    border-radius: 16px;
     background: white;
-    padding: 14px;
+    padding: 12px 14px;
     cursor: pointer;
     transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .customer-button:hover {
     transform: translateY(-1px);
-    border-color: rgba(24, 74, 69, 0.36);
-    box-shadow: 0 8px 22px rgba(31, 42, 55, 0.08);
+    border-color: rgba(150, 21, 95, 0.26);
+    box-shadow: 0 12px 24px rgba(73, 28, 53, 0.08);
   }
   .customer-button.active {
     border-color: var(--brand);
-    background: #f5faf8;
+    background: linear-gradient(180deg, #fffafd, #fdf2f8);
   }
   .customer-button .name {
     font-weight: 700;
-    color: var(--ink);
+    color: var(--brand-dark);
   }
   .customer-button .meta {
     font-size: 12px;
     color: var(--muted);
     margin-top: 4px;
   }
-  .content {
-    padding: 24px;
+  .preview-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .preview-customer {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 26px;
+    color: var(--brand-dark);
+  }
+  .preview-subtext {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .icon-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid rgba(150, 21, 95, 0.12);
+    background: white;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .top-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    background: var(--brand-soft);
+    border-radius: 18px;
+    padding: 8px;
+  }
+  .tab-button {
+    border: none;
+    background: transparent;
+    color: #b5628a;
+    border-radius: 14px;
+    padding: 12px 10px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .tab-button.active {
+    background: white;
+    color: var(--ink);
+    box-shadow: 0 8px 18px rgba(73, 28, 53, 0.1);
+  }
+  .panel-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 253, 0.98));
+    border: 1px solid rgba(150, 21, 95, 0.1);
+    border-radius: 22px;
+    padding: 20px;
+    box-shadow: 0 16px 30px rgba(73, 28, 53, 0.06);
+  }
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .history-card {
+    border: 1px solid rgba(150, 21, 95, 0.1);
+    border-radius: 16px;
+    padding: 16px;
+    background: white;
+  }
+  .history-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .history-service {
+    font-weight: 700;
+    color: var(--brand-dark);
+  }
+  .history-meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .money {
+    font-weight: 700;
+    color: var(--brand-dark);
+  }
+  .action-button {
+    border: none;
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .action-button.primary {
+    background: linear-gradient(180deg, #aa166b, #8f0e59);
+    color: white;
+    box-shadow: 0 14px 28px rgba(143, 14, 89, 0.22);
+  }
+  .action-button.secondary {
+    background: white;
+    border: 1px solid rgba(150, 21, 95, 0.12);
+    color: var(--brand-dark);
+  }
+  .controls-card {
+    display: grid;
+    gap: 14px;
+  }
+  .issuer-pill {
+    border: 1px solid rgba(150, 21, 95, 0.12);
+    border-radius: 16px;
+    background: white;
+    padding: 14px 18px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--brand-dark);
+  }
+  .filename-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+  }
+  .filename-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .filename-box {
+    background: var(--brand-soft);
+    border-radius: 12px;
+    min-height: 58px;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: break-all;
+    color: var(--brand-dark);
+  }
+  .actions-row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .zoom-button,
+  .print-button {
+    border-radius: 14px;
+    cursor: pointer;
+  }
+  .zoom-button {
+    border: 1px solid rgba(150, 21, 95, 0.12);
+    background: white;
+    color: var(--brand-dark);
+    font-size: 28px;
+    box-shadow: 0 8px 18px rgba(73, 28, 53, 0.08);
+  }
+  .print-button {
+    border: none;
+    background: linear-gradient(180deg, #aa166b, #8f0e59);
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 14px 28px rgba(143, 14, 89, 0.22);
+  }
+  .doc-help {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .preview-scroll {
+    position: relative;
+  }
+  .invoice-scale-wrapper {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .invoice-scale {
+    width: 794px;
+    transform-origin: top center;
+    margin: 0 auto;
+  }
+  .invoice-scale.no-scale {
+    width: 794px;
+  }
+  .document-wrap {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(250, 241, 246, 0.78));
+    border-radius: 24px;
+    padding: 18px;
+  }
+  .invoice-sheet {
+    background: var(--paper);
+    border: 1px solid #efeff2;
+    box-shadow: 0 18px 34px rgba(35, 16, 29, 0.08);
+    padding: 40px 46px 34px;
+  }
+  .doc-top-meta {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+    font-size: 11px;
+  }
+  .doc-top-meta div {
+    text-align: right;
+  }
+  .doc-top-meta div + div {
+    margin-top: 4px;
+  }
+  .invoice-title {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 30px;
+    color: #26121f;
+    line-height: 1.3;
+    margin: 10px 0 22px;
+    text-align: center;
+  }
+  .doc-header-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 28px;
+    margin-bottom: 24px;
+  }
+  .doc-recipient {
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .doc-copy {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #41333d;
+  }
+  .doc-amount-row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 18px;
+    border-bottom: 2px solid #2d232b;
+    padding-bottom: 4px;
+    margin-top: 12px;
+    font-weight: 700;
+  }
+  .doc-amount-row .label {
+    font-size: 12px;
+  }
+  .doc-amount-row .value {
+    font-size: 28px;
+  }
+  .company-box {
+    border: 1px dashed #cbc1ca;
+    padding: 16px;
+    font-size: 12px;
+    color: #2f2530;
+    min-height: 150px;
+  }
+  .company-box h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+  .company-box p + p {
+    margin-top: 3px;
+  }
+  .doc-status-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    background: #f6eef3;
+    color: var(--brand-dark);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 999px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  th, td {
+    border: 1px solid #7f7a80;
+    padding: 8px 6px;
+    font-size: 12px;
+    vertical-align: top;
+  }
+  th {
+    text-align: center;
+    background: #dbdbdb;
+    font-weight: 700;
+  }
+  td.num, th.num {
+    text-align: right;
+  }
+  .notes {
+    margin-top: 18px;
+  }
+  .notes-label {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .notes-box {
+    width: 100%;
+    min-height: 88px;
+    padding: 10px;
+    border: 1px solid #7f7a80;
+    resize: none;
+  }
+  .footer-note {
+    font-size: 11px;
+    color: #4d3c49;
+    margin-top: 14px;
   }
   .empty-state {
-    min-height: 420px;
+    min-height: 620px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -183,246 +540,138 @@
     color: var(--muted);
     padding: 32px;
   }
-  .invoice-sheet {
-    background: var(--paper);
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    overflow: hidden;
+  .hidden-for-print {
+    display: block;
   }
-  .invoice-header {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: 24px;
-    padding: 28px 28px 24px;
-    border-bottom: 1px solid var(--line);
-    background:
-      linear-gradient(180deg, rgba(24, 74, 69, 0.06), rgba(24, 74, 69, 0));
-  }
-  .invoice-kicker {
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    color: var(--accent);
-    margin-bottom: 8px;
-  }
-  .invoice-title {
-    font-family: 'Noto Serif JP', serif;
-    font-size: 30px;
-    color: var(--brand);
-    line-height: 1.3;
-    margin-bottom: 14px;
-  }
-  .invoice-recipient {
-    font-size: 24px;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-  .invoice-subtext {
-    font-size: 13px;
-    color: var(--muted);
-  }
-  .invoice-meta {
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 16px;
-    background: rgba(255, 255, 255, 0.7);
-  }
-  .meta-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 6px 0;
-    font-size: 13px;
-  }
-  .meta-row .key {
-    color: var(--muted);
-  }
-  .meta-row .value {
-    font-weight: 600;
-    text-align: right;
-  }
-  .amount-strip {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    margin-top: 18px;
-    padding: 16px 18px;
-    border-radius: 16px;
-    background: var(--brand);
-    color: white;
-  }
-  .amount-strip .label {
-    font-size: 12px;
-    letter-spacing: 0.12em;
-    opacity: 0.82;
-  }
-  .amount-strip .value {
-    font-size: 28px;
-    font-weight: 700;
-  }
-  .invoice-body {
-    padding: 24px 28px 28px;
-  }
-  .chip-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 18px;
-  }
-  .chip {
-    background: var(--chip);
-    color: var(--brand);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 10px;
-    border-radius: 999px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th, td {
-    padding: 12px 10px;
-    border-bottom: 1px solid var(--line);
-    font-size: 13px;
-    vertical-align: top;
-  }
-  th {
-    text-align: left;
-    color: var(--muted);
-    font-weight: 600;
-    font-size: 12px;
-  }
-  td.num, th.num {
-    text-align: right;
-  }
-  .totals {
-    width: min(360px, 100%);
-    margin-left: auto;
-    margin-top: 20px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    overflow: hidden;
-  }
-  .totals-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--line);
-    font-size: 13px;
-  }
-  .totals-row:last-child {
-    border-bottom: none;
-  }
-  .totals-row.grand {
-    background: #f8fafc;
-    font-weight: 700;
-    color: var(--brand);
-    font-size: 15px;
-  }
-  .notes {
-    margin-top: 22px;
-    padding: 16px;
-    border-radius: 16px;
-    background: #fbfaf8;
-    border: 1px solid var(--line);
-  }
-  .notes h3 {
-    font-size: 13px;
-    margin-bottom: 8px;
-    color: var(--brand);
-  }
-  .notes p {
-    font-size: 13px;
-    color: var(--muted);
-    white-space: pre-wrap;
-  }
-  .footer-note {
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 18px;
-  }
-  @media (max-width: 960px) {
-    .main {
+  @media (max-width: 1100px) {
+    .dialog-body {
       grid-template-columns: 1fr;
     }
     .sidebar {
-      position: static;
+      border-right: none;
+      border-bottom: 1px solid rgba(150, 21, 95, 0.08);
     }
-    .invoice-header {
+  }
+  @media (max-width: 760px) {
+    body {
+      padding: 0;
+    }
+    .dialog-shell {
+      border-radius: 0;
+    }
+    .dialog-header,
+    .sidebar,
+    .content {
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+    .top-tabs {
+      grid-template-columns: 1fr 1fr;
+    }
+    .filename-row,
+    .actions-row,
+    .doc-header-grid {
       grid-template-columns: 1fr;
+    }
+    .invoice-scale,
+    .invoice-scale.no-scale {
+      width: 100%;
+      min-width: 680px;
+    }
+    .invoice-sheet {
+      padding: 24px 16px;
     }
   }
   @media print {
-    header, .hero, .sidebar {
-      display: none;
-    }
     body {
       background: white;
+      padding: 0;
     }
-    .main {
-      display: block;
+    .hidden-for-print,
+    .sidebar {
+      display: none !important;
+    }
+    .app-shell,
+    .dialog-shell,
+    .dialog-body,
+    .content,
+    .preview-shell,
+    .panel-card,
+    .document-wrap,
+    .invoice-scale-wrapper,
+    .invoice-scale {
       width: 100%;
+      max-width: none;
       margin: 0;
       padding: 0;
+      border: none;
+      box-shadow: none;
+      background: white;
     }
-    .content {
-      padding: 0;
-    }
-    .panel,
     .invoice-sheet {
+      padding: 0;
       box-shadow: none;
       border: none;
-      border-radius: 0;
     }
   }
 </style>
 </head>
 <body>
-<header>
-  <div class="header-inner">
-    <div>
-      <div class="brand-kicker">STATIC INVOICE DEMO</div>
-      <h1 id="site-title">請求書デモ</h1>
+<div class="app-shell">
+  <main class="dialog-shell">
+    <div class="dialog-header hidden-for-print">
+      <div>
+        <div class="brand-kicker">STATIC INVOICE DEMO</div>
+        <h1 id="site-title">請求書デモ</h1>
+      </div>
+      <div class="header-note">
+        <div id="header-note">Google スプレッドシート公開 CSV、ローカル CSV、または JSON を読み込みます。</div>
+        <div id="hero-description" class="doc-help">元の `DemoUserCheckDialog` を public/static 向けに寄せた簡易版です。</div>
+      </div>
     </div>
-    <div class="header-note" id="header-note">Google スプレッドシート公開 CSV または JSON を読み込みます。</div>
-  </div>
-</header>
 
-<section class="hero">
-  <div class="hero-panel">
-    <div class="brand-kicker">PUBLIC DEMO</div>
-    <h2>GitHub Pages でそのまま配布できる<br>静的な請求書デモ雛形</h2>
-    <p id="hero-description">サンプルデータだけを公開し、本番版とは切り離して配布するためのスターターです。個人情報や実請求データは入れずにお使いください。</p>
-  </div>
-</section>
+    <div class="dialog-body">
+      <aside class="sidebar hidden-for-print">
+        <div class="section-title">SUMMARY</div>
+        <div class="summary-grid" id="summary-grid"></div>
+        <div class="source-card">
+          <div class="source-label">LOCAL FILE</div>
+          <div class="source-actions">
+            <label class="source-button" for="local-csv-file-input">
+              CSV / Excel ファイルを選択
+              <input id="local-csv-file-input" type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </label>
+            <div class="source-meta" id="local-csv-file-name">現在は設定ファイルのCSVまたはJSONを使用します。</div>
+            <button class="source-clear" type="button" id="clear-local-csv-button" hidden>選択したファイルを解除する</button>
+          </div>
+        </div>
+        <div class="status-box" id="status-box">請求データを読み込み中です。</div>
+        <div class="section-title">CUSTOMERS</div>
+        <div class="customer-list" id="customer-list"></div>
+      </aside>
 
-<main class="main">
-  <aside class="panel sidebar">
-    <div class="section-title">SUMMARY</div>
-    <div class="summary-grid" id="summary-grid"></div>
-    <div class="status-box" id="status-box">請求データを読み込み中です。</div>
-    <div class="section-title">CUSTOMERS</div>
-    <div class="customer-list" id="customer-list"></div>
-  </aside>
-
-  <section class="panel content">
-    <div id="invoice-root" class="empty-state">請求先を選ぶと右側に請求書プレビューが表示されます。</div>
-  </section>
-</main>
+      <section class="content">
+        <div id="invoice-root" class="empty-state">利用者を選ぶと右側に請求書管理ダイアログが表示されます。</div>
+      </section>
+    </div>
+  </main>
+</div>
 
 <script>
   const defaultConfig = {
     siteTitle: '請求書デモ',
-    headerNote: 'Google スプレッドシート公開 CSV または JSON を読み込みます。',
-    heroDescription: 'サンプルデータだけを公開し、本番版とは切り離して配布するためのスターターです。個人情報や実請求データは入れずにお使いください。',
+    headerNote: 'Google スプレッドシート公開 CSV、ローカル CSV、または JSON を読み込みます。',
+    heroDescription: '元の DemoUserCheckDialog を public/static 向けに寄せた簡易版です。実データは入れずにお使いください。',
     invoiceSheetCsvUrl: '',
-    fallbackInvoicesUrl: './data/invoices.json',
-    issuerName: '介護美容サンプル事業所',
-    issuerAddress: '大阪府大阪市サンプル区 1-2-3',
-    issuerContact: '06-0000-0000',
-    bankNote: 'お振込期限は発行日から 14 日以内を目安にご案内ください。',
+    localInvoiceCsvUrl: '',
+    fallbackInvoicesUrl: './invoices.json',
+    issuerName: 'konoyubi介護美容（デモ）',
+    issuerAddress: '東京都渋谷区神宮前1-2-3 美容ビル2F',
+    issuerContact: '03-1234-5678',
+    issuerPostalCode: '150-0001',
+    issuerEmail: 'info@konoyubi-demo.co.jp',
+    issuerInvoiceNumber: 'T1234567890123',
+    bankNote: '振込先：○○銀行 0000000',
     defaultTaxRate: 0.1,
     currency: 'JPY'
   };
@@ -431,9 +680,19 @@
   const statusBox = document.getElementById('status-box');
   const customerList = document.getElementById('customer-list');
   const invoiceRoot = document.getElementById('invoice-root');
+  const localCsvFileInput = document.getElementById('local-csv-file-input');
+  const localCsvFileName = document.getElementById('local-csv-file-name');
+  const clearLocalCsvButton = document.getElementById('clear-local-csv-button');
+
   let currentConfig = { ...defaultConfig };
-  let currentGroups = [];
-  let selectedInvoiceId = '';
+  let currentUsers = [];
+  let selectedUserId = '';
+  let activeTab = 'preview';
+  let includeUserNameInFileName = false;
+  let zoom100 = false;
+  let selectedLocalCsvName = '';
+  let selectedLocalCsvRecords = null;
+  const remarksState = {};
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -450,14 +709,14 @@
     let row = [];
     let inQuotes = false;
 
-    for (let i = 0; i < text.length; i += 1) {
-      const char = text[i];
-      const next = text[i + 1];
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+      const next = text[index + 1];
 
       if (char === '"') {
         if (inQuotes && next === '"') {
           current += '"';
-          i += 1;
+          index += 1;
         } else {
           inQuotes = !inQuotes;
         }
@@ -466,7 +725,7 @@
         current = '';
       } else if ((char === '\n' || char === '\r') && !inQuotes) {
         if (char === '\r' && next === '\n') {
-          i += 1;
+          index += 1;
         }
         row.push(current);
         rows.push(row);
@@ -491,9 +750,7 @@
 
   function csvToRecords(text) {
     const rows = parseCsv(text).filter((row) => row.some((cell) => String(cell || '').trim() !== ''));
-    if (rows.length === 0) {
-      return [];
-    }
+    if (rows.length === 0) return [];
     const headers = rows[0].map(normalizeHeader);
     return rows.slice(1).map((row) => {
       const record = {};
@@ -504,7 +761,25 @@
     });
   }
 
-  function parseBoolean(value, fallback) {
+  function rowsToRecords(rows) {
+    const normalizedRows = rows.filter((row) => Array.isArray(row) && row.some((cell) => String(cell || '').trim() !== ''));
+    if (normalizedRows.length === 0) return [];
+    const headers = normalizedRows[0].map(normalizeHeader);
+    return normalizedRows.slice(1).map((row) => {
+      const record = {};
+      headers.forEach((header, index) => {
+        const value = row[index];
+        if (typeof value === 'object' && value !== null) {
+          record[header] = JSON.stringify(value);
+        } else {
+          record[header] = String(value ?? '').trim();
+        }
+      });
+      return record;
+    });
+  }
+
+  function parseBoolean(value, fallback = false) {
     const normalized = String(value ?? '').trim().toLowerCase();
     if (!normalized) return fallback;
     if (['true', '1', 'yes'].includes(normalized)) return true;
@@ -517,6 +792,30 @@
     return Number.isFinite(parsed) ? parsed : fallback;
   }
 
+  function parseJsonValue(value, fallback) {
+    if (Array.isArray(value) || (value && typeof value === 'object')) {
+      return value;
+    }
+    const text = String(value ?? '').trim();
+    if (!text) return fallback;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return fallback;
+    }
+  }
+
+  function normalizeExtraCharges(value) {
+    const parsed = parseJsonValue(value, []);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => ({
+      label: String(item.label || item.name || '').trim(),
+      amount: parseNumber(item.amount || item.price, 0),
+      quantity: parseNumber(item.quantity, 1),
+      unit: String(item.unit || '').trim()
+    })).filter((item) => item.label || item.amount);
+  }
+
   function formatCurrency(value) {
     return new Intl.NumberFormat('ja-JP', {
       style: 'currency',
@@ -525,274 +824,813 @@
     }).format(value);
   }
 
+  function formatPlainCurrency(value) {
+    return new Intl.NumberFormat('ja-JP', {
+      maximumFractionDigits: 0
+    }).format(value);
+  }
+
   function formatDate(dateText) {
     if (!dateText) return '-';
     const date = new Date(`${dateText}T00:00:00+09:00`);
     if (Number.isNaN(date.getTime())) return escapeHtml(dateText);
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    return `${year}年${month}月${day}日`;
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+
+  function formatShortDate(dateText) {
+    if (!dateText) return '';
+    const date = new Date(`${dateText}T00:00:00+09:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+
+  function formatFileDate(dateText) {
+    return String(dateText || '').replace(/-/g, '');
+  }
+
+  function loadTextFromCandidates(paths) {
+    const candidates = paths.filter(Boolean);
+    if (candidates.length === 0) {
+      return Promise.reject(new Error('no paths provided'));
+    }
+
+    let index = 0;
+
+    function tryNext() {
+      if (index >= candidates.length) {
+        throw new Error('all candidates failed');
+      }
+
+      const path = candidates[index];
+      index += 1;
+
+      return fetch(path, { cache: 'no-store' })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`fetch failed: ${path}`);
+          }
+          return response.text();
+        })
+        .catch(() => tryNext());
+    }
+
+    return tryNext();
+  }
+
+  function loadJsonFromCandidates(paths) {
+    return loadTextFromCandidates(paths).then((text) => JSON.parse(text));
   }
 
   function loadConfig() {
-    return fetch('./data/invoices-site-config.json', { cache: 'no-store' })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('config not found');
-        }
-        return response.json();
-      })
+    return loadJsonFromCandidates([
+      './invoices-site-config.json',
+      './data/invoices-site-config.json'
+    ])
       .then((config) => ({ ...defaultConfig, ...config }))
       .catch(() => ({ ...defaultConfig }));
   }
 
   function loadInvoiceRecords(config) {
-    const csvUrl = String(config.invoiceSheetCsvUrl || '').trim();
-    if (csvUrl) {
-      return fetch(csvUrl, { cache: 'no-store' })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error('csv fetch failed');
-          }
-          return response.text();
-        })
+    if (Array.isArray(selectedLocalCsvRecords)) {
+      return Promise.resolve(selectedLocalCsvRecords);
+    }
+
+    const csvCandidates = [
+      String(config.invoiceSheetCsvUrl || '').trim(),
+      String(config.localInvoiceCsvUrl || '').trim()
+    ].filter(Boolean);
+
+    if (csvCandidates.length > 0) {
+      return loadTextFromCandidates(csvCandidates)
         .then(csvToRecords)
         .catch(() => loadFallbackRecords(config));
     }
+
     return loadFallbackRecords(config);
   }
 
   function loadFallbackRecords(config) {
-    return fetch(config.fallbackInvoicesUrl, { cache: 'no-store' })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('fallback fetch failed');
-        }
-        return response.json();
-      })
+    const fallbackCandidates = [
+      String(config.fallbackInvoicesUrl || '').trim(),
+      './invoices.json',
+      './data/invoices.json'
+    ].filter(Boolean);
+
+    return loadJsonFromCandidates(fallbackCandidates)
       .then((data) => Array.isArray(data) ? data : [])
       .catch(() => []);
   }
 
+  function updateLocalCsvUi() {
+    if (selectedLocalCsvName) {
+      localCsvFileName.textContent = `選択中: ${selectedLocalCsvName}`;
+      clearLocalCsvButton.hidden = false;
+      return;
+    }
+
+    const configuredLocalPath = String(currentConfig.localInvoiceCsvUrl || '').trim();
+    if (configuredLocalPath) {
+      localCsvFileName.textContent = `設定ファイルのローカルCSVを使用中: ${configuredLocalPath}`;
+    } else if (String(currentConfig.invoiceSheetCsvUrl || '').trim()) {
+      localCsvFileName.textContent = '現在は設定ファイルのスプレッドシートCSVを使用します。';
+    } else {
+      localCsvFileName.textContent = '現在は設定ファイルのCSVまたはJSONを使用します。';
+    }
+    clearLocalCsvButton.hidden = true;
+  }
+
   function normalizeRecord(record) {
-    const invoiceId = String(record.invoiceId || record.invoiceid || '').trim();
+    const customerId = String(
+      record.userId || record.userid ||
+      record.customerId || record.customerid ||
+      record.customerCode || record.customercode || ''
+    ).trim();
+    const reservationId = String(
+      record.reservationId || record.reservationid ||
+      record.invoiceId || record.invoiceid || ''
+    ).trim();
     const visible = parseBoolean(record.visible, true);
-    if (!invoiceId || !visible) {
+    if (!customerId || !reservationId || !visible) {
       return null;
     }
+
     return {
-      invoiceId,
-      customerCode: String(record.customerCode || record.customercode || '').trim(),
-      customerName: String(record.customerName || record.customername || '').trim(),
-      recipientName: String(record.recipientName || record.recipientname || '').trim(),
-      issueDate: String(record.issueDate || record.issuedate || '').trim(),
-      serviceDate: String(record.serviceDate || record.servicedate || '').trim(),
-      serviceName: String(record.serviceName || record.servicename || '').trim(),
-      quantity: parseNumber(record.quantity, 1),
-      unitPrice: parseNumber(record.unitPrice || record.unitprice, 0),
-      taxMode: String(record.taxMode || record.taxmode || 'included').trim().toLowerCase(),
-      isPaid: parseBoolean(record.isPaid || record.ispaid, false),
-      notes: String(record.notes || '').trim(),
+      customerId,
+      reservationId,
+      customerName: String(record.userName || record.username || record.customerName || record.customername || '').trim(),
+      invoiceRecipient: String(record.invoiceRecipient || record.invoicerecipient || record.recipientName || record.recipientname || '').trim(),
+      facilityName: String(record.facilityName || record.facilityname || '').trim(),
+      companyName: String(record.companyName || record.companyname || '').trim(),
+      issueDate: String(record.invoiceDate || record.invoicedate || record.issueDate || record.issuedate || '').trim(),
+      serviceDate: String(record.date || record.serviceDate || record.servicedate || '').trim(),
+      serviceName: String(record.service || record.serviceName || record.servicename || '').trim(),
+      staffName: String(record.staff || record.staffName || record.staffname || record.stylist || '').trim(),
+      price: parseNumber(record.price || record.unitPrice || record.unitprice, 0),
+      quantity: parseNumber(record.baseQuantity || record.basequantity || record.quantity, 1),
+      unit: String(record.baseUnit || record.baseunit || record.unit || '回').trim(),
+      taxIncluded: parseBoolean(record.taxIncluded || record.taxincluded, true),
+      isCollected: parseBoolean(record.isCollected || record.iscollected || record.isPaid || record.ispaid, false),
+      isCollectedDate: String(record.isCollectedDate || record.iscollecteddate || '').trim(),
+      receiptIssueDate: String(record.receiptIssueDate || record.receiptissuedate || '').trim(),
+      invoiceCode: String(record.invoiceCode || record.invoicecode || '').trim(),
+      remarks: String(record.remarks || record.notes || '').trim(),
+      memo: String(record.memo || '').trim(),
+      extraCharges: normalizeExtraCharges(record.extraCharges || record.extracharges),
+      outsourceUnitPrice: parseNumber(record.outsourceUnitPrice || record.outsourceunitprice, 0),
+      outsourceUnitQuantity: parseNumber(record.outsourceUnitQuantity || record.outsourceunitquantity, 0),
+      outsourceUnit: String(record.outsourceUnit || record.outsourceunit || '').trim(),
+      outsourceUnitExtraCharges: parseJsonValue(record.outsourceUnitExtraCharges || record.outsourceunitextracharges, []),
       visible
     };
   }
 
-  function groupInvoices(records) {
-    const groupsById = new Map();
+  function cloneUser(user) {
+    return {
+      ...user,
+      serviceHistory: user.serviceHistory.map((history) => ({ ...history }))
+    };
+  }
+
+  function groupUsers(records) {
+    const usersById = new Map();
 
     records.map(normalizeRecord).filter(Boolean).forEach((record) => {
-      if (!groupsById.has(record.invoiceId)) {
-        groupsById.set(record.invoiceId, {
-          invoiceId: record.invoiceId,
-          customerCode: record.customerCode,
+      if (!usersById.has(record.customerId)) {
+        usersById.set(record.customerId, {
+          customerId: record.customerId,
           customerName: record.customerName,
-          recipientName: record.recipientName,
+          invoiceRecipient: record.invoiceRecipient || record.customerName,
+          facilityName: record.facilityName,
+          companyName: record.companyName,
           issueDate: record.issueDate,
-          isPaid: record.isPaid,
-          notes: record.notes,
-          lines: []
+          notes: record.remarks,
+          memo: record.memo,
+          serviceHistory: []
         });
       }
 
-      const group = groupsById.get(record.invoiceId);
-      group.lines.push({
+      const user = usersById.get(record.customerId);
+      user.serviceHistory.push({
+        reservationId: record.reservationId,
         serviceDate: record.serviceDate,
         serviceName: record.serviceName,
+        price: record.price,
         quantity: record.quantity,
-        unitPrice: record.unitPrice,
-        taxMode: record.taxMode
+        unit: record.unit || '回',
+        taxIncluded: record.taxIncluded,
+        isCollected: record.isCollected,
+        isCollectedDate: record.isCollectedDate,
+        receiptIssueDate: record.receiptIssueDate,
+        invoiceCode: record.invoiceCode,
+        staffName: record.staffName,
+        remarks: record.remarks,
+        memo: record.memo,
+        extraCharges: record.extraCharges,
+        outsourceUnitPrice: record.outsourceUnitPrice,
+        outsourceUnitQuantity: record.outsourceUnitQuantity,
+        outsourceUnit: record.outsourceUnit,
+        outsourceUnitExtraCharges: record.outsourceUnitExtraCharges
       });
-      group.isPaid = group.isPaid && record.isPaid;
-      if (!group.notes && record.notes) {
-        group.notes = record.notes;
+      if (!user.notes && record.remarks) {
+        user.notes = record.remarks;
+      }
+      if (!user.memo && record.memo) {
+        user.memo = record.memo;
       }
     });
 
-    return Array.from(groupsById.values()).sort((a, b) => {
-      return String(b.issueDate).localeCompare(String(a.issueDate), 'ja');
-    });
+    return Array.from(usersById.values())
+      .map((user) => {
+        user.serviceHistory.sort((a, b) => String(a.serviceDate).localeCompare(String(b.serviceDate), 'ja'));
+        return user;
+      })
+      .sort((a, b) => a.customerName.localeCompare(b.customerName, 'ja'));
   }
 
-  function calcLine(line) {
-    const subtotal = line.quantity * line.unitPrice;
-    if (line.taxMode === 'excluded') {
-      const tax = Math.round(subtotal * Number(currentConfig.defaultTaxRate || 0.1));
-      return { subtotal, tax, total: subtotal + tax };
-    }
-    const tax = Math.round(subtotal - subtotal / (1 + Number(currentConfig.defaultTaxRate || 0.1)));
-    return { subtotal, tax, total: subtotal };
+  function getSelectedUser() {
+    return currentUsers.find((user) => user.customerId === selectedUserId) || null;
   }
 
-  function summarize(groups) {
-    const stats = {
-      invoiceCount: groups.length,
-      customerCount: new Set(groups.map((group) => group.customerCode || group.customerName)).size,
-      unpaidCount: groups.filter((group) => !group.isPaid).length
-    };
+  function getUncollectedHistories(user) {
+    return user.serviceHistory.filter((history) => !history.isCollected);
+  }
 
-    const totalAmount = groups.reduce((sum, group) => {
-      return sum + group.lines.reduce((groupSum, line) => groupSum + calcLine(line).total, 0);
+  function getCollectedHistories(user) {
+    return user.serviceHistory.filter((history) => history.isCollected);
+  }
+
+  function calcHistoryAmounts(history) {
+    const extraChargesTotal = (history.extraCharges || []).reduce((sum, charge) => {
+      return sum + (charge.amount * (charge.quantity || 1));
     }, 0);
-
-    return { ...stats, totalAmount };
-  }
-
-  function renderSummary(groups) {
-    const summary = summarize(groups);
-    summaryGrid.innerHTML = `
-      <div class="summary-card">
-        <div class="label">請求書</div>
-        <div class="value">${summary.invoiceCount}</div>
-      </div>
-      <div class="summary-card">
-        <div class="label">請求総額</div>
-        <div class="value">${escapeHtml(formatCurrency(summary.totalAmount))}</div>
-      </div>
-      <div class="summary-card">
-        <div class="label">顧客数</div>
-        <div class="value">${summary.customerCount}</div>
-      </div>
-      <div class="summary-card">
-        <div class="label">未入金</div>
-        <div class="value">${summary.unpaidCount}</div>
-      </div>
-    `;
-  }
-
-  function renderCustomerList(groups) {
-    if (!groups.length) {
-      customerList.innerHTML = '<div class="status-box">表示できる請求データがありません。</div>';
-      return;
+    const subtotal = (history.price * history.quantity) + extraChargesTotal;
+    if (history.taxIncluded) {
+      const tax = Math.floor(subtotal - subtotal / (1 + Number(currentConfig.defaultTaxRate || 0.1)));
+      return { subtotal, tax, total: subtotal };
     }
-
-    customerList.innerHTML = groups.map((group) => {
-      const total = group.lines.reduce((sum, line) => sum + calcLine(line).total, 0);
-      const active = group.invoiceId === selectedInvoiceId ? 'active' : '';
-      return `
-        <button class="customer-button ${active}" type="button" data-invoice-id="${escapeHtml(group.invoiceId)}">
-          <div class="name">${escapeHtml(group.recipientName || group.customerName || group.invoiceId)}</div>
-          <div class="meta">${escapeHtml(group.issueDate)} / ${escapeHtml(formatCurrency(total))} / ${group.isPaid ? '入金済' : '未入金'}</div>
-        </button>
-      `;
-    }).join('');
-
-    customerList.querySelectorAll('[data-invoice-id]').forEach((button) => {
-      button.addEventListener('click', () => {
-        selectedInvoiceId = button.getAttribute('data-invoice-id') || '';
-        renderCustomerList(currentGroups);
-        renderInvoice(currentGroups.find((group) => group.invoiceId === selectedInvoiceId) || null);
-      });
-    });
+    const tax = Math.floor(subtotal * Number(currentConfig.defaultTaxRate || 0.1));
+    return { subtotal, tax, total: subtotal + tax };
   }
 
-  function renderInvoice(group) {
-    if (!group) {
-      invoiceRoot.className = 'empty-state';
-      invoiceRoot.innerHTML = '請求先を選ぶと右側に請求書プレビューが表示されます。';
-      return;
-    }
-
-    const linesHtml = group.lines.map((line) => {
-      const amounts = calcLine(line);
-      return `
-        <tr>
-          <td>${escapeHtml(formatDate(line.serviceDate))}</td>
-          <td>${escapeHtml(line.serviceName)}</td>
-          <td class="num">${escapeHtml(String(line.quantity))}</td>
-          <td class="num">${escapeHtml(formatCurrency(line.unitPrice))}</td>
-          <td>${line.taxMode === 'excluded' ? '外税' : '内税'}</td>
-          <td class="num">${escapeHtml(formatCurrency(amounts.total))}</td>
-        </tr>
-      `;
-    }).join('');
-
-    const totals = group.lines.reduce((acc, line) => {
-      const amounts = calcLine(line);
+  function calcTotals(histories) {
+    return histories.reduce((acc, history) => {
+      const amounts = calcHistoryAmounts(history);
       acc.subtotal += amounts.subtotal;
       acc.tax += amounts.tax;
       acc.total += amounts.total;
       return acc;
     }, { subtotal: 0, tax: 0, total: 0 });
+  }
+
+  function summarize(users) {
+    const allHistories = users.flatMap((user) => user.serviceHistory);
+    const uncollected = allHistories.filter((history) => !history.isCollected);
+    const collected = allHistories.filter((history) => history.isCollected);
+
+    return {
+      userCount: users.length,
+      uncollectedCount: uncollected.length,
+      collectedCount: collected.length,
+      uncollectedAmount: calcTotals(uncollected).total
+    };
+  }
+
+  function renderSummary(users) {
+    const summary = summarize(users);
+    summaryGrid.innerHTML = `
+      <div class="summary-card">
+        <div class="label">利用者</div>
+        <div class="value">${summary.userCount}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">未回収件数</div>
+        <div class="value">${summary.uncollectedCount}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">回収済件数</div>
+        <div class="value">${summary.collectedCount}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">未回収金額</div>
+        <div class="value">${escapeHtml(formatCurrency(summary.uncollectedAmount))}</div>
+      </div>
+    `;
+  }
+
+  function renderCustomerList(users) {
+    if (!users.length) {
+      customerList.innerHTML = '<div class="status-box">表示できる利用者データがありません。</div>';
+      return;
+    }
+
+    customerList.innerHTML = users.map((user) => {
+      const uncollected = getUncollectedHistories(user);
+      const collected = getCollectedHistories(user);
+      const active = user.customerId === selectedUserId ? 'active' : '';
+      return `
+        <button class="customer-button ${active}" type="button" data-customer-id="${escapeHtml(user.customerId)}">
+          <div class="name">${escapeHtml(user.customerName || user.invoiceRecipient || user.customerId)}</div>
+          <div class="meta">${escapeHtml(user.invoiceRecipient || '-')}</div>
+          <div class="meta">未回収 ${uncollected.length}件 / 回収済 ${collected.length}件</div>
+        </button>
+      `;
+    }).join('');
+
+    customerList.querySelectorAll('[data-customer-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedUserId = button.getAttribute('data-customer-id') || '';
+        renderCustomerList(currentUsers);
+        renderSelectedUser();
+      });
+    });
+  }
+
+  function sanitizeFilePart(value) {
+    return String(value || '')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/\s+/g, '')
+      .replace(/_+/g, '_')
+      .trim();
+  }
+
+  function generateFileName(user, isReceipt) {
+    const shopName = String(currentConfig.issuerName || 'konoyubi介護美容').replace('（デモ）', '');
+    const docType = isReceipt ? '領収書' : '請求書';
+    const month = formatFileDate(user.issueDate || '').slice(0, 6) || '202511';
+    const displayId = String(user.customerId || '001').replace(/^demo-invoice-user-/, '');
+    const recipient = includeUserNameInFileName
+      ? `${user.customerName || user.invoiceRecipient}様`
+      : (user.invoiceRecipient || user.customerName || user.customerId);
+
+    return [
+      sanitizeFilePart(shopName),
+      sanitizeFilePart(docType),
+      sanitizeFilePart(recipient),
+      sanitizeFilePart(displayId),
+      month
+    ].filter(Boolean).join('_') + '.pdf';
+  }
+
+  function getRemarks(user) {
+    if (!(user.customerId in remarksState)) {
+      remarksState[user.customerId] = user.notes || '';
+    }
+    return remarksState[user.customerId];
+  }
+
+  function setRemarks(customerId, value) {
+    remarksState[customerId] = value;
+  }
+
+  function buildDocumentRows(histories) {
+    const rows = histories.flatMap((history) => {
+      const amounts = calcHistoryAmounts(history);
+      const baseRow = {
+        key: history.reservationId,
+        label: `${formatShortDate(history.serviceDate)} ${history.serviceName}`.trim(),
+        qty: `${history.quantity}${history.unit || ''}`,
+        unitPrice: history.price,
+        total: history.price * history.quantity
+      };
+      const extraRows = (history.extraCharges || []).map((charge, index) => ({
+        key: `${history.reservationId}-extra-${index}`,
+        label: ` ${charge.label}`,
+        qty: `${charge.quantity || 1}${charge.unit || ''}`,
+        unitPrice: charge.amount,
+        total: charge.amount * (charge.quantity || 1)
+      }));
+      return [baseRow, ...extraRows];
+    });
+
+    while (rows.length < 9) {
+      rows.push({
+        key: `blank-${rows.length}`,
+        label: '',
+        qty: '',
+        unitPrice: '',
+        total: ''
+      });
+    }
+
+    return rows;
+  }
+
+  function renderDocument(user, histories, kind) {
+    const totals = calcTotals(histories);
+    const rows = buildDocumentRows(histories);
+    const isReceipt = kind === 'receipt';
+    const title = isReceipt ? '領収書' : '請求書';
+    const topLabel = isReceipt ? '領収書番号' : '請求書番号';
+    const topNumber = histories.find((history) => history.invoiceCode)?.invoiceCode
+      || `${String(user.customerId || '').replace(/^demo-invoice-user-/, '')}_${formatFileDate(user.issueDate).slice(0, 6) || '202511'}`;
+    const issueDate = isReceipt
+      ? (histories.map((history) => history.receiptIssueDate || history.isCollectedDate).filter(Boolean).sort().slice(-1)[0] || user.issueDate)
+      : user.issueDate;
+    const message = isReceipt
+      ? '下記のとおり領収いたしました。'
+      : '下記のとおりご請求申し上げます。';
+    const amountLabel = isReceipt ? '受領金額' : 'ご請求金額';
+    const remarksText = getRemarks(user);
+    const memoText = histories.map((history) => history.memo).filter(Boolean).join('\n');
+
+    return `
+      <div class="invoice-scale-wrapper">
+        <div class="invoice-scale ${zoom100 ? 'no-scale' : ''}">
+          <article class="invoice-sheet">
+            <div class="doc-top-meta">
+              <div>
+                <div>発行日：${escapeHtml(formatDate(issueDate))}</div>
+                <div>${escapeHtml(topLabel)}：${escapeHtml(topNumber)}</div>
+              </div>
+            </div>
+
+            <div class="invoice-title">${title}</div>
+
+            <div class="doc-header-grid">
+              <div>
+                <div class="doc-recipient">${escapeHtml(user.invoiceRecipient || user.customerName || user.customerId)}</div>
+                <div class="doc-copy">件名：介護美容施術料</div>
+                <div class="doc-copy">${message}</div>
+                <div class="doc-amount-row">
+                  <span class="label">${amountLabel}</span>
+                  <span class="value">￥${escapeHtml(formatPlainCurrency(totals.total))} -</span>
+                </div>
+              </div>
+              <div class="company-box">
+                <h3>${escapeHtml(currentConfig.issuerName)}</h3>
+                ${user.companyName ? `<p>${escapeHtml(user.companyName)}</p>` : ''}
+                <p>〒${escapeHtml(currentConfig.issuerPostalCode || '')}</p>
+                <p>${escapeHtml(currentConfig.issuerAddress || '')}</p>
+                <p>TEL：${escapeHtml(currentConfig.issuerContact || '')}</p>
+                <p>${escapeHtml(currentConfig.issuerEmail || '')}</p>
+                <p>登録番号：${escapeHtml(currentConfig.issuerInvoiceNumber || '')}</p>
+              </div>
+            </div>
+
+            <div class="doc-status-row">
+              <div class="chip-row">
+                <span class="chip">${isReceipt ? '回収済' : '未回収'}</span>
+                <span class="chip">${histories.length} 明細</span>
+                <span class="chip">税率 ${Math.round(Number(currentConfig.defaultTaxRate || 0.1) * 100)}%</span>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 60%;">品番・品名</th>
+                  <th style="width: 10%;">数量</th>
+                  <th style="width: 15%;" class="num">単価</th>
+                  <th style="width: 15%;" class="num">金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map((row) => `
+                  <tr>
+                    <td>${escapeHtml(row.label)}</td>
+                    <td>${escapeHtml(row.qty)}</td>
+                    <td class="num">${row.unitPrice === '' ? '' : escapeHtml(formatPlainCurrency(row.unitPrice))}</td>
+                    <td class="num">${row.total === '' ? '' : escapeHtml(formatPlainCurrency(row.total))}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3">小計</td>
+                  <td class="num">${escapeHtml(formatPlainCurrency(totals.subtotal))}</td>
+                </tr>
+                <tr>
+                  <td colspan="3">消費税(10%)</td>
+                  <td class="num">${escapeHtml(formatPlainCurrency(totals.tax))}</td>
+                </tr>
+                <tr>
+                  <td colspan="3"><strong>合計</strong></td>
+                  <td class="num"><strong>${escapeHtml(formatPlainCurrency(totals.total))}</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div class="notes">
+              <div class="notes-label">備考</div>
+              <textarea class="notes-box" data-remarks-customer-id="${escapeHtml(user.customerId)}" placeholder="備考があれば入力してください">${escapeHtml(remarksText)}</textarea>
+            </div>
+
+            <div class="footer-note">
+              いつも有難うございます。<br>
+              ${escapeHtml(currentConfig.bankNote || '')}
+              ${memoText ? `<br>${escapeHtml(memoText)}` : ''}
+            </div>
+          </article>
+        </div>
+      </div>
+    `;
+  }
+
+  function markHistoryAsCollected(customerId, reservationId) {
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    currentUsers = currentUsers.map((user) => {
+      if (user.customerId !== customerId) return user;
+      return {
+        ...user,
+        serviceHistory: user.serviceHistory.map((history) => {
+          if (history.reservationId !== reservationId) return history;
+          return {
+            ...history,
+            isCollected: true,
+            isCollectedDate: iso,
+            receiptIssueDate: history.receiptIssueDate || iso
+          };
+        })
+      };
+    });
+
+    renderSummary(currentUsers);
+    renderCustomerList(currentUsers);
+    if (activeTab === 'history') {
+      activeTab = 'collected';
+    }
+    renderSelectedUser();
+  }
+
+  function printCurrentDocument(user, isReceipt) {
+    const originalTitle = document.title;
+    document.title = generateFileName(user, isReceipt).replace(/\.pdf$/i, '');
+    window.print();
+    window.setTimeout(() => {
+      document.title = originalTitle;
+    }, 200);
+  }
+
+  function renderHistoryPanel(user, histories, collected) {
+    if (!histories.length) {
+      return `<div class="panel-card"><div class="empty-state">${collected ? '回収済のサービスはありません' : '未回収のサービスはありません'}</div></div>`;
+    }
+
+    return `
+      <div class="panel-card">
+        <div class="history-list">
+          ${histories.map((history) => {
+            const amounts = calcHistoryAmounts(history);
+            return `
+              <div class="history-card">
+                <div class="history-head">
+                  <div>
+                    <div class="history-service">${escapeHtml(history.serviceName)}</div>
+                    <div class="history-meta">${escapeHtml(formatDate(history.serviceDate))}</div>
+                    <div class="history-meta">数量: ${escapeHtml(String(history.quantity))}${escapeHtml(history.unit || '回')} / ${history.taxIncluded ? '内税' : '外税'}</div>
+                    ${history.staffName ? `<div class="history-meta">担当: ${escapeHtml(history.staffName)}</div>` : ''}
+                    ${history.memo ? `<div class="history-meta">メモ: ${escapeHtml(history.memo)}</div>` : ''}
+                    ${collected && history.isCollectedDate ? `<div class="history-meta">回収日: ${escapeHtml(formatDate(history.isCollectedDate))}</div>` : ''}
+                  </div>
+                  <div>
+                    <div class="money">${escapeHtml(formatCurrency(amounts.total))}</div>
+                    ${collected ? '' : `<button class="action-button primary" type="button" data-mark-collected="${escapeHtml(history.reservationId)}">回収済にする</button>`}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSelectedUser() {
+    const user = getSelectedUser();
+    if (!user) {
+      invoiceRoot.className = 'empty-state';
+      invoiceRoot.textContent = '利用者を選ぶと右側に請求書管理ダイアログが表示されます。';
+      return;
+    }
+
+    const uncollected = getUncollectedHistories(user);
+    const collected = getCollectedHistories(user);
+    const fileName = generateFileName(user, activeTab === 'receipt');
+    const canShowPrint = activeTab === 'preview' || activeTab === 'receipt';
+    const activeHistories = activeTab === 'receipt' ? collected : uncollected;
+
+    let panelHtml = '';
+    if (activeTab === 'history') {
+      panelHtml = renderHistoryPanel(user, uncollected, false);
+    } else if (activeTab === 'collected') {
+      panelHtml = renderHistoryPanel(user, collected, true);
+    } else if (activeTab === 'preview') {
+      panelHtml = `
+        <div class="panel-card controls-card hidden-for-print">
+          <div class="issuer-pill">${escapeHtml(currentConfig.issuerName)} 設定</div>
+          <div class="filename-row">
+            <label class="filename-checkbox">
+              <input type="checkbox" id="filename-user-toggle" ${includeUserNameInFileName ? 'checked' : ''}>
+              <span>ファイル名を利用者名に</span>
+            </label>
+            <div class="filename-box">${escapeHtml(fileName)}</div>
+          </div>
+          <div class="actions-row">
+            <button class="zoom-button" type="button" id="zoom-toggle">${zoom100 ? '−' : '⊕'}</button>
+            <button class="print-button" type="button" id="print-button">印刷 / PDF</button>
+          </div>
+          <div class="doc-help">PDF保存は印刷画面で「PDF に保存」を選びます。</div>
+        </div>
+        <div class="preview-scroll">${renderDocument(user, uncollected, 'invoice')}</div>
+      `;
+    } else {
+      panelHtml = collected.length === 0
+        ? '<div class="panel-card"><div class="empty-state">回収済みのサービスがありません</div></div>'
+        : `
+          <div class="panel-card controls-card hidden-for-print">
+            <div class="issuer-pill">${escapeHtml(currentConfig.issuerName)} 設定</div>
+            <div class="filename-row">
+              <label class="filename-checkbox">
+                <input type="checkbox" id="filename-user-toggle" ${includeUserNameInFileName ? 'checked' : ''}>
+                <span>ファイル名を利用者名に</span>
+              </label>
+              <div class="filename-box">${escapeHtml(fileName)}</div>
+            </div>
+            <div class="actions-row">
+              <button class="zoom-button" type="button" id="zoom-toggle">${zoom100 ? '−' : '⊕'}</button>
+              <button class="print-button" type="button" id="print-button">印刷 / PDF</button>
+            </div>
+            <div class="doc-help">PDF保存は印刷画面で「PDF に保存」を選びます。</div>
+          </div>
+          <div class="preview-scroll">${renderDocument(user, collected, 'receipt')}</div>
+        `;
+    }
 
     invoiceRoot.className = '';
     invoiceRoot.innerHTML = `
-      <article class="invoice-sheet">
-        <div class="invoice-header">
+      <div class="preview-shell">
+        <div class="preview-header hidden-for-print">
           <div>
-            <div class="invoice-kicker">INVOICE PREVIEW</div>
-            <div class="invoice-title">ご請求書</div>
-            <div class="invoice-recipient">${escapeHtml(group.recipientName || group.customerName || '請求先未設定')}</div>
-            <div class="invoice-subtext">${escapeHtml(group.customerName || '')}</div>
-            <div class="amount-strip">
-              <div>
-                <div class="label">TOTAL DUE</div>
-                <div class="value">${escapeHtml(formatCurrency(totals.total))}</div>
-              </div>
-              <div>${group.isPaid ? '入金済' : '未入金'}</div>
-            </div>
+            <div class="preview-customer">${escapeHtml(user.customerName)} 様</div>
+            <div class="preview-subtext">${escapeHtml(user.invoiceRecipient || user.customerName)} / ${escapeHtml(user.facilityName || '施設未設定')}</div>
           </div>
-          <div class="invoice-meta">
-            <div class="meta-row"><span class="key">請求番号</span><span class="value">${escapeHtml(group.invoiceId)}</span></div>
-            <div class="meta-row"><span class="key">発行日</span><span class="value">${escapeHtml(formatDate(group.issueDate))}</span></div>
-            <div class="meta-row"><span class="key">顧客コード</span><span class="value">${escapeHtml(group.customerCode || '-')}</span></div>
-            <div class="meta-row"><span class="key">発行元</span><span class="value">${escapeHtml(currentConfig.issuerName)}</span></div>
-            <div class="meta-row"><span class="key">住所</span><span class="value">${escapeHtml(currentConfig.issuerAddress)}</span></div>
-            <div class="meta-row"><span class="key">連絡先</span><span class="value">${escapeHtml(currentConfig.issuerContact)}</span></div>
-          </div>
+          <button class="icon-button" type="button" id="clear-selection-button" aria-label="閉じる">×</button>
         </div>
-        <div class="invoice-body">
-          <div class="chip-row">
-            <span class="chip">${group.isPaid ? '入金済' : '未入金'}</span>
-            <span class="chip">${group.lines.length} 明細</span>
-            <span class="chip">税率 ${Math.round(Number(currentConfig.defaultTaxRate || 0.1) * 100)}%</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>施術日</th>
-                <th>内容</th>
-                <th class="num">数量</th>
-                <th class="num">単価</th>
-                <th>税区分</th>
-                <th class="num">金額</th>
-              </tr>
-            </thead>
-            <tbody>${linesHtml}</tbody>
-          </table>
-          <div class="totals">
-            <div class="totals-row"><span>税抜小計</span><span>${escapeHtml(formatCurrency(totals.subtotal))}</span></div>
-            <div class="totals-row"><span>消費税</span><span>${escapeHtml(formatCurrency(totals.tax))}</span></div>
-            <div class="totals-row grand"><span>ご請求額</span><span>${escapeHtml(formatCurrency(totals.total))}</span></div>
-          </div>
-          <div class="notes">
-            <h3>備考</h3>
-            <p>${escapeHtml(group.notes || currentConfig.bankNote || '')}</p>
-          </div>
-          <div class="footer-note">このページは GitHub Pages でそのまま公開できる静的プレビューです。実データは公開しない運用をおすすめします。</div>
+
+        <div class="top-tabs hidden-for-print">
+          <button class="tab-button ${activeTab === 'history' ? 'active' : ''}" type="button" data-tab="history">未回収</button>
+          <button class="tab-button ${activeTab === 'preview' ? 'active' : ''}" type="button" data-tab="preview">請求書</button>
+          <button class="tab-button ${activeTab === 'collected' ? 'active' : ''}" type="button" data-tab="collected">回収済</button>
+          <button class="tab-button ${activeTab === 'receipt' ? 'active' : ''}" type="button" data-tab="receipt">領収書</button>
         </div>
-      </article>
+
+        ${panelHtml}
+      </div>
     `;
+
+    invoiceRoot.querySelectorAll('[data-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        activeTab = button.getAttribute('data-tab') || 'preview';
+        renderSelectedUser();
+        updateStatus();
+      });
+    });
+
+    const clearButton = document.getElementById('clear-selection-button');
+    if (clearButton) {
+      clearButton.addEventListener('click', () => {
+        selectedUserId = '';
+        renderCustomerList(currentUsers);
+        renderSelectedUser();
+        updateStatus();
+      });
+    }
+
+    const fileNameToggle = document.getElementById('filename-user-toggle');
+    if (fileNameToggle) {
+      fileNameToggle.addEventListener('change', (event) => {
+        includeUserNameInFileName = Boolean(event.target.checked);
+        renderSelectedUser();
+      });
+    }
+
+    const zoomToggle = document.getElementById('zoom-toggle');
+    if (zoomToggle) {
+      zoomToggle.addEventListener('click', () => {
+        zoom100 = !zoom100;
+        renderSelectedUser();
+      });
+    }
+
+    const printButton = document.getElementById('print-button');
+    if (printButton && canShowPrint) {
+      printButton.addEventListener('click', () => {
+        printCurrentDocument(user, activeTab === 'receipt');
+      });
+    }
+
+    invoiceRoot.querySelectorAll('[data-mark-collected]').forEach((button) => {
+      button.addEventListener('click', () => {
+        markHistoryAsCollected(user.customerId, button.getAttribute('data-mark-collected') || '');
+      });
+    });
+
+    invoiceRoot.querySelectorAll('[data-remarks-customer-id]').forEach((element) => {
+      element.addEventListener('input', (event) => {
+        setRemarks(user.customerId, event.target.value);
+      });
+    });
+  }
+
+  function updateStatus() {
+    const user = getSelectedUser();
+    if (!currentUsers.length) {
+      statusBox.textContent = '表示できる請求データがありません。CSV URL、ローカル CSV、invoices.json、または invoices-site-config.json を確認してください。';
+      return;
+    }
+    if (!user) {
+      statusBox.textContent = `利用者 ${currentUsers.length} 名を読み込みました。左側から対象を選ぶと請求書管理を確認できます。`;
+      return;
+    }
+
+    const uncollected = getUncollectedHistories(user).length;
+    const collected = getCollectedHistories(user).length;
+    statusBox.textContent = `${user.customerName} の未回収 ${uncollected} 件 / 回収済 ${collected} 件を表示できます。`;
+  }
+
+  async function refreshRecords() {
+    const records = await loadInvoiceRecords(currentConfig);
+    currentUsers = groupUsers(records).map(cloneUser);
+    selectedUserId = currentUsers[0]?.customerId || '';
+    activeTab = 'preview';
+
+    renderSummary(currentUsers);
+    renderCustomerList(currentUsers);
+    renderSelectedUser();
+    updateStatus();
+    updateLocalCsvUi();
+  }
+
+  function readLocalCsvFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('file read failed'));
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
+  function readLocalBinaryFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('file read failed'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function excelToRecords(arrayBuffer) {
+    if (!window.XLSX) {
+      throw new Error('xlsx library unavailable');
+    }
+    const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      return [];
+    }
+    const worksheet = workbook.Sheets[firstSheetName];
+    const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+    return rowsToRecords(rows);
+  }
+
+  function attachLocalCsvHandlers() {
+    if (localCsvFileInput) {
+      localCsvFileInput.addEventListener('change', async (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        try {
+          const lowerName = String(file.name || '').toLowerCase();
+          if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+            const binary = await readLocalBinaryFile(file);
+            selectedLocalCsvRecords = excelToRecords(binary);
+          } else {
+            const text = await readLocalCsvFile(file);
+            selectedLocalCsvRecords = csvToRecords(text);
+          }
+          selectedLocalCsvName = file.name;
+          await refreshRecords();
+        } catch {
+          selectedLocalCsvRecords = null;
+          selectedLocalCsvName = '';
+          updateLocalCsvUi();
+          statusBox.textContent = '選択したファイルを読み込めませんでした。CSVまたはExcelの形式を確認してください。';
+        }
+      });
+    }
+
+    if (clearLocalCsvButton) {
+      clearLocalCsvButton.addEventListener('click', async () => {
+        selectedLocalCsvRecords = null;
+        selectedLocalCsvName = '';
+        if (localCsvFileInput) {
+          localCsvFileInput.value = '';
+        }
+        await refreshRecords();
+      });
+    }
   }
 
   async function init() {
@@ -801,18 +1639,8 @@
     document.getElementById('site-title').textContent = currentConfig.siteTitle;
     document.getElementById('header-note').textContent = currentConfig.headerNote;
     document.getElementById('hero-description').textContent = currentConfig.heroDescription;
-
-    const records = await loadInvoiceRecords(currentConfig);
-    currentGroups = groupInvoices(records);
-    selectedInvoiceId = currentGroups[0]?.invoiceId || '';
-
-    renderSummary(currentGroups);
-    renderCustomerList(currentGroups);
-    renderInvoice(currentGroups.find((group) => group.invoiceId === selectedInvoiceId) || null);
-
-    statusBox.textContent = currentGroups.length
-      ? `請求書 ${currentGroups.length} 件を表示しています。CSV URL を設定すると Google スプレッドシートを優先して読み込みます。`
-      : '表示できる請求データがありません。data/invoices.json または invoices-site-config.json を確認してください。';
+    attachLocalCsvHandlers();
+    await refreshRecords();
   }
 
   init();

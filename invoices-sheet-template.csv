@@ -1,4 +1,9 @@
-invoiceId,customerCode,customerName,recipientName,issueDate,serviceDate,serviceName,quantity,unitPrice,taxMode,isPaid,notes,visible
-sample-001,C001,山田 花子,さくら介護施設 御中,2026-06-01,2026-05-28,フットケア,1,8000,included,FALSE,初回デモデータ,TRUE
-sample-002,C001,山田 花子,さくら介護施設 御中,2026-06-01,2026-05-28,ハンドケア,1,5000,included,FALSE,同日追加施術,TRUE
-sample-003,C002,佐藤 一郎,ひまわりホーム 御中,2026-06-01,2026-05-30,ケアメイク,1,12000,excluded,TRUE,入金済みサンプル,TRUE
+userId,userName,invoiceRecipient,facilityName,companyName,reservationId,date,service,staff,price,baseQuantity,baseUnit,taxIncluded,extraCharges,outsourceUnitPrice,outsourceUnitQuantity,outsourceUnit,outsourceUnitExtraCharges,invoiceCode,invoiceDate,isCollected,isCollectedDate,receiptIssueDate,remarks,memo,visible
+demo-invoice-user-001,佐藤 花子,さくら介護施設 御中,さくら介護施設,株式会社ケアサポート,res-inv-001-1,2025-11-05,ケアメイク,田中 美咲,5000,1,回,FALSE,[],0,0,,[],,2025-11-30,TRUE,2025-11-05,2025-11-05,領収済みデモデータ,,TRUE
+demo-invoice-user-001,佐藤 花子,さくら介護施設 御中,さくら介護施設,株式会社ケアサポート,res-inv-001-2,2025-11-12,ネイルケア,田中 美咲,4000,1,回,FALSE,[],0,0,,[],,2025-11-30,TRUE,2025-11-12,2025-11-12,,,TRUE
+demo-invoice-user-001,佐藤 花子,さくら介護施設 御中,さくら介護施設,株式会社ケアサポート,res-inv-001-3,2025-11-19,フットケア,鈴木 健太,3500,1,回,TRUE,"[{""label"":""出張費"", ""amount"":500, ""quantity"":1, ""unit"":""件""}]",1200,1,名,[],INV-202511-001,2025-11-30,FALSE,,,請求書備考,未回収の施術があります,TRUE
+demo-invoice-user-002,田中 一郎,田中 美咲 様,ひまわりホーム,ひまわりホーム運営会社,res-inv-002-1,2025-11-08,ヘアー,鈴木 健太,3000,1,回,TRUE,[],0,0,,[],,2025-11-30,TRUE,2025-11-08,2025-11-08,,,TRUE
+demo-invoice-user-002,田中 一郎,田中 美咲 様,ひまわりホーム,ひまわりホーム運営会社,res-inv-002-2,2025-11-15,ヘアー,鈴木 健太,3000,1,回,TRUE,[],0,0,,[],,2025-11-30,FALSE,,,月内未回収,月内未回収デモ,TRUE
+demo-invoice-user-003,鈴木 和子,さくら介護施設 御中,さくら介護施設,株式会社ケアサポート,res-inv-003-1,2025-11-03,ケアメイク,田中 美咲,5000,1,回,FALSE,[],0,0,,[],,2025-11-30,TRUE,2025-11-03,2025-11-03,,,TRUE
+demo-invoice-user-003,鈴木 和子,さくら介護施設 御中,さくら介護施設,株式会社ケアサポート,res-inv-003-2,2025-11-10,ケアメイク,田中 美咲,5000,1,回,FALSE,[],0,0,,[],,2025-11-30,TRUE,2025-11-10,2025-11-10,,,TRUE
+demo-invoice-user-003,鈴木 和子,さくら介護施設 御中,さくら介護施設,株式会社ケアサポート,res-inv-003-3,2025-11-17,ネイルケア,田中 美咲,4000,1,回,FALSE,[],0,0,,[],,2025-11-30,FALSE,,,請求書プレビュー確認用,,TRUE
