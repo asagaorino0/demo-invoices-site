@@ -282,6 +282,64 @@
     padding: 16px;
     background: white;
   }
+  .history-card.selected {
+    border-color: rgba(150, 21, 95, 0.34);
+    box-shadow: 0 14px 28px rgba(143, 14, 89, 0.08);
+    background: linear-gradient(180deg, #fffefe, #fff7fb);
+  }
+  .history-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .history-tag-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .history-tag-button {
+    border: 1px solid rgba(150, 21, 95, 0.16);
+    border-radius: 999px;
+    background: white;
+    color: var(--brand-dark);
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .history-tag-button.active {
+    background: linear-gradient(180deg, #aa166b, #8f0e59);
+    color: white;
+    box-shadow: 0 12px 24px rgba(143, 14, 89, 0.18);
+    border-color: transparent;
+  }
+  .history-tag-button:disabled {
+    opacity: 0.45;
+    cursor: default;
+    box-shadow: none;
+  }
+  .history-selection-count {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .history-select-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+  .history-checkbox {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    accent-color: var(--brand);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
   .history-head {
     display: flex;
     justify-content: space-between;
@@ -693,6 +751,7 @@
   let selectedLocalCsvName = '';
   let selectedLocalCsvRecords = null;
   const remarksState = {};
+  const selectedHistoryState = {};
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -842,6 +901,28 @@
     const date = new Date(`${dateText}T00:00:00+09:00`);
     if (Number.isNaN(date.getTime())) return '';
     return `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+
+  function parseLocalDate(dateText) {
+    if (!dateText) return null;
+    const date = new Date(`${dateText}T00:00:00+09:00`);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  }
+
+  function getMonthKeyFromDateText(dateText) {
+    const date = parseLocalDate(dateText);
+    if (!date) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function getRelativeMonthInfo(offset) {
+    const base = new Date();
+    const date = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+    return {
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      label: `${date.getFullYear()}年${date.getMonth() + 1}月`
+    };
   }
 
   function formatFileDate(dateText) {
@@ -1003,7 +1084,7 @@
           facilityName: record.facilityName,
           companyName: record.companyName,
           issueDate: record.issueDate,
-          notes: record.remarks,
+          notes: '',
           memo: record.memo,
           serviceHistory: []
         });
@@ -1031,9 +1112,6 @@
         outsourceUnit: record.outsourceUnit,
         outsourceUnitExtraCharges: record.outsourceUnitExtraCharges
       });
-      if (!user.notes && record.remarks) {
-        user.notes = record.remarks;
-      }
       if (!user.memo && record.memo) {
         user.memo = record.memo;
       }
@@ -1041,7 +1119,7 @@
 
     return Array.from(usersById.values())
       .map((user) => {
-        user.serviceHistory.sort((a, b) => String(a.serviceDate).localeCompare(String(b.serviceDate), 'ja'));
+        user.serviceHistory.sort((a, b) => String(b.serviceDate).localeCompare(String(a.serviceDate), 'ja'));
         return user;
       })
       .sort((a, b) => a.customerName.localeCompare(b.customerName, 'ja'));
@@ -1049,6 +1127,30 @@
 
   function getSelectedUser() {
     return currentUsers.find((user) => user.customerId === selectedUserId) || null;
+  }
+
+  function getSelectedHistoryKeys(user) {
+    if (!user) return [];
+    if (!(user.customerId in selectedHistoryState)) {
+      const uncollectedKeys = getUncollectedHistories(user)
+        .map((history) => history.reservationId)
+        .filter(Boolean);
+      selectedHistoryState[user.customerId] = uncollectedKeys.length === 1 ? [...uncollectedKeys] : [];
+    }
+    return selectedHistoryState[user.customerId];
+  }
+
+  function setSelectedHistoryKeys(customerId, keys) {
+    selectedHistoryState[customerId] = [...new Set(keys.filter(Boolean))];
+  }
+
+  function toggleHistorySelection(customerId, reservationId) {
+    const currentKeys = selectedHistoryState[customerId] || [];
+    if (currentKeys.includes(reservationId)) {
+      setSelectedHistoryKeys(customerId, currentKeys.filter((key) => key !== reservationId));
+      return;
+    }
+    setSelectedHistoryKeys(customerId, [...currentKeys, reservationId]);
   }
 
   function getUncollectedHistories(user) {
@@ -1173,7 +1275,7 @@
 
   function getRemarks(user) {
     if (!(user.customerId in remarksState)) {
-      remarksState[user.customerId] = user.notes || '';
+      remarksState[user.customerId] = '';
     }
     return remarksState[user.customerId];
   }
@@ -1310,7 +1412,7 @@
               </tfoot>
             </table>
 
-            <div class="notes">
+            <div class="notes ${remarksText.trim() ? '' : 'hidden-for-print'}">
               <div class="notes-label">備考</div>
               <textarea class="notes-box" data-remarks-customer-id="${escapeHtml(user.customerId)}" placeholder="備考があれば入力してください">${escapeHtml(remarksText)}</textarea>
             </div>
@@ -1346,6 +1448,10 @@
       };
     });
 
+    if (selectedHistoryState[customerId]) {
+      selectedHistoryState[customerId] = selectedHistoryState[customerId].filter((key) => key !== reservationId);
+    }
+
     renderSummary(currentUsers);
     renderCustomerList(currentUsers);
     if (activeTab === 'history') {
@@ -1363,26 +1469,49 @@
     }, 200);
   }
 
-  function renderHistoryPanel(user, histories, collected) {
+  function renderHistoryPanel(user, histories, collected, selectedKeys) {
     if (!histories.length) {
       return `<div class="panel-card"><div class="empty-state">${collected ? '回収済のサービスはありません' : '未回収のサービスはありません'}</div></div>`;
     }
 
+    const previousMonth = getRelativeMonthInfo(-1);
+    const currentMonth = getRelativeMonthInfo(0);
+    const monthTags = [previousMonth, currentMonth];
+
     return `
       <div class="panel-card">
+        ${collected ? '' : `
+          <div class="history-toolbar">
+            <div class="history-selection-count">選択した項目 ${selectedKeys.length}件</div>
+            <div class="history-tag-group">
+              ${monthTags.map((tag) => {
+                const monthHistories = histories.filter((history) => getMonthKeyFromDateText(history.serviceDate) === tag.key);
+                const hasItems = monthHistories.length > 0;
+                const allSelected = hasItems && monthHistories.every((history) => selectedKeys.includes(history.reservationId));
+                return `<button class="history-tag-button ${allSelected ? 'active' : ''}" type="button" data-select-month="${escapeHtml(tag.key)}" ${hasItems ? '' : 'disabled'}>${escapeHtml(tag.label)}</button>`;
+              }).join('')}
+            </div>
+            <button class="action-button secondary" type="button" id="select-all-histories">全て選択</button>
+            <button class="action-button secondary" type="button" id="clear-selected-histories">選択解除</button>
+          </div>
+        `}
         <div class="history-list">
           ${histories.map((history) => {
             const amounts = calcHistoryAmounts(history);
+            const checked = !collected && selectedKeys.includes(history.reservationId);
             return `
-              <div class="history-card">
+              <div class="history-card ${checked ? 'selected' : ''}">
                 <div class="history-head">
-                  <div>
-                    <div class="history-service">${escapeHtml(history.serviceName)}</div>
-                    <div class="history-meta">${escapeHtml(formatDate(history.serviceDate))}</div>
-                    <div class="history-meta">数量: ${escapeHtml(String(history.quantity))}${escapeHtml(history.unit || '回')} / ${history.taxIncluded ? '内税' : '外税'}</div>
-                    ${history.staffName ? `<div class="history-meta">担当: ${escapeHtml(history.staffName)}</div>` : ''}
-                    ${history.memo ? `<div class="history-meta">メモ: ${escapeHtml(history.memo)}</div>` : ''}
-                    ${collected && history.isCollectedDate ? `<div class="history-meta">回収日: ${escapeHtml(formatDate(history.isCollectedDate))}</div>` : ''}
+                  <div class="history-select-row">
+                    ${collected ? '' : `<input class="history-checkbox" type="checkbox" data-history-checkbox="${escapeHtml(history.reservationId)}" ${checked ? 'checked' : ''} aria-label="${escapeHtml(history.serviceName)} を請求書対象に選択">`}
+                    <div>
+                      <div class="history-service">${escapeHtml(history.serviceName)}</div>
+                      <div class="history-meta">${escapeHtml(formatDate(history.serviceDate))}</div>
+                      <div class="history-meta">数量: ${escapeHtml(String(history.quantity))}${escapeHtml(history.unit || '回')} / ${history.taxIncluded ? '内税' : '外税'}</div>
+                      ${history.staffName ? `<div class="history-meta">担当: ${escapeHtml(history.staffName)}</div>` : ''}
+                      ${history.memo ? `<div class="history-meta">メモ: ${escapeHtml(history.memo)}</div>` : ''}
+                      ${collected && history.isCollectedDate ? `<div class="history-meta">回収日: ${escapeHtml(formatDate(history.isCollectedDate))}</div>` : ''}
+                    </div>
                   </div>
                   <div>
                     <div class="money">${escapeHtml(formatCurrency(amounts.total))}</div>
@@ -1407,17 +1536,20 @@
 
     const uncollected = getUncollectedHistories(user);
     const collected = getCollectedHistories(user);
+    const selectedHistoryKeys = getSelectedHistoryKeys(user);
+    const selectedUncollected = uncollected.filter((history) => selectedHistoryKeys.includes(history.reservationId));
     const fileName = generateFileName(user, activeTab === 'receipt');
     const canShowPrint = activeTab === 'preview' || activeTab === 'receipt';
-    const activeHistories = activeTab === 'receipt' ? collected : uncollected;
 
     let panelHtml = '';
     if (activeTab === 'history') {
-      panelHtml = renderHistoryPanel(user, uncollected, false);
+      panelHtml = renderHistoryPanel(user, uncollected, false, selectedHistoryKeys);
     } else if (activeTab === 'collected') {
-      panelHtml = renderHistoryPanel(user, collected, true);
+      panelHtml = renderHistoryPanel(user, collected, true, []);
     } else if (activeTab === 'preview') {
-      panelHtml = `
+      panelHtml = selectedUncollected.length === 0
+        ? '<div class="panel-card"><div class="empty-state">請求書に含める未回収項目を選択してください。</div></div>'
+        : `
         <div class="panel-card controls-card hidden-for-print">
           <div class="issuer-pill">${escapeHtml(currentConfig.issuerName)} 設定</div>
           <div class="filename-row">
@@ -1433,7 +1565,7 @@
           </div>
           <div class="doc-help">PDF保存は印刷画面で「PDF に保存」を選びます。</div>
         </div>
-        <div class="preview-scroll">${renderDocument(user, uncollected, 'invoice')}</div>
+        <div class="preview-scroll">${renderDocument(user, selectedUncollected, 'invoice')}</div>
       `;
     } else {
       panelHtml = collected.length === 0
@@ -1482,7 +1614,14 @@
 
     invoiceRoot.querySelectorAll('[data-tab]').forEach((button) => {
       button.addEventListener('click', () => {
-        activeTab = button.getAttribute('data-tab') || 'preview';
+        const nextTab = button.getAttribute('data-tab') || 'preview';
+        if (nextTab === 'preview' && selectedUncollected.length === 0) {
+          activeTab = 'history';
+          renderSelectedUser();
+          updateStatus();
+          return;
+        }
+        activeTab = nextTab;
         renderSelectedUser();
         updateStatus();
       });
@@ -1513,6 +1652,56 @@
         renderSelectedUser();
       });
     }
+
+    const selectAllButton = document.getElementById('select-all-histories');
+    if (selectAllButton) {
+      selectAllButton.addEventListener('click', () => {
+        setSelectedHistoryKeys(user.customerId, uncollected.map((history) => history.reservationId));
+        renderSelectedUser();
+        updateStatus();
+      });
+    }
+
+    const clearSelectedButton = document.getElementById('clear-selected-histories');
+    if (clearSelectedButton) {
+      clearSelectedButton.addEventListener('click', () => {
+        setSelectedHistoryKeys(user.customerId, []);
+        renderSelectedUser();
+        updateStatus();
+      });
+    }
+
+    invoiceRoot.querySelectorAll('[data-select-month]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const monthKey = button.getAttribute('data-select-month') || '';
+        if (!monthKey) return;
+        const monthReservationIds = uncollected
+          .filter((history) => getMonthKeyFromDateText(history.serviceDate) === monthKey)
+          .map((history) => history.reservationId)
+          .filter(Boolean);
+        if (!monthReservationIds.length) return;
+
+        const currentKeys = getSelectedHistoryKeys(user);
+        const allSelected = monthReservationIds.every((reservationId) => currentKeys.includes(reservationId));
+        if (allSelected) {
+          setSelectedHistoryKeys(user.customerId, currentKeys.filter((key) => !monthReservationIds.includes(key)));
+        } else {
+          setSelectedHistoryKeys(user.customerId, [...currentKeys, ...monthReservationIds]);
+        }
+        renderSelectedUser();
+        updateStatus();
+      });
+    });
+
+    invoiceRoot.querySelectorAll('[data-history-checkbox]').forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        const reservationId = checkbox.getAttribute('data-history-checkbox') || '';
+        if (!reservationId) return;
+        toggleHistorySelection(user.customerId, reservationId);
+        renderSelectedUser();
+        updateStatus();
+      });
+    });
 
     const printButton = document.getElementById('print-button');
     if (printButton && canShowPrint) {
@@ -1547,14 +1736,15 @@
 
     const uncollected = getUncollectedHistories(user).length;
     const collected = getCollectedHistories(user).length;
-    statusBox.textContent = `${user.customerName} の未回収 ${uncollected} 件 / 回収済 ${collected} 件を表示できます。`;
+    const selected = getSelectedHistoryKeys(user).length;
+    statusBox.textContent = `${user.customerName} の未回収 ${uncollected} 件 / 回収済 ${collected} 件 / 請求書選択 ${selected} 件を表示できます。`;
   }
 
   async function refreshRecords() {
     const records = await loadInvoiceRecords(currentConfig);
     currentUsers = groupUsers(records).map(cloneUser);
     selectedUserId = currentUsers[0]?.customerId || '';
-    activeTab = 'preview';
+    activeTab = 'history';
 
     renderSummary(currentUsers);
     renderCustomerList(currentUsers);
