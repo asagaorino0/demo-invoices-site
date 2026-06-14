@@ -1,2 +1,19 @@
 .DS_Store
 *.log
+
+# dependencies
+node_modules/
+
+# local env
+.env.local
+.env*.local
+
+# Next.js build output
+.next/
+out/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# local app data
+.demo-invoices-local-store.json
