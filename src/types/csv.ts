@@ -1,6 +1,7 @@
 export interface InvoiceCsvRow {
   userId: string;
   userName: string;
+  defaultInvoiceDateMode: string;
   invoiceRecipient: string;
   facilityName: string;
   companyName: string;
@@ -43,6 +44,7 @@ export interface InvoiceImportBundle {
 export const INVOICE_CSV_HEADERS: Array<keyof InvoiceCsvRow> = [
   'userId',
   'userName',
+  'defaultInvoiceDateMode',
   'invoiceRecipient',
   'facilityName',
   'companyName',

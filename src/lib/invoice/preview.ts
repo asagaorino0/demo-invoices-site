@@ -83,9 +83,14 @@ export function buildDocumentRows(lines: ServiceLine[]): InvoicePreviewRow[] {
 }
 
 export function getInvoiceLines(lines: ServiceLine[], selectedLineIds: string[]): ServiceLine[] {
-  return lines.filter(
-    (line) => line.collectionStatus === 'uncollected' && selectedLineIds.includes(line.id)
+  const lineMap = new Map(
+    lines
+      .filter((line) => line.collectionStatus === 'uncollected')
+      .map((line) => [line.id, line])
   );
+  return selectedLineIds
+    .map((id) => lineMap.get(id))
+    .filter((line): line is ServiceLine => Boolean(line));
 }
 
 export function getReceiptLines(lines: ServiceLine[]): ServiceLine[] {
@@ -104,7 +109,7 @@ export function getDocumentNumber(
   const matchedUserId = String(sourceReservationId).match(/_user([^_]+)/)?.[1] || '';
   const baseId = matchedUserId || String(project.customerId || '').replace(/^.*?(\d+)$/, '$1') || '001';
   const baseDate =
-    kind === 'receipt' ? getReceiptIssueDate(project, lines) || project.issueDate : project.issueDate;
+    kind === 'receipt' ? getReceiptIssueDate(project, lines) || getInvoiceIssueDate(project, lines) : getInvoiceIssueDate(project, lines);
   const month = formatFileDate(baseDate).slice(0, 6) || '202511';
 
   return `${baseId}_${month}`;
@@ -120,8 +125,30 @@ export function getReceiptIssueDate(project: Project, lines: ServiceLine[]): str
       .map((line) => line.receiptIssuedAt || line.collectedAt)
       .filter(Boolean)
       .sort()
-      .slice(-1)[0] || project.issueDate
+      .slice(-1)[0] || getInvoiceIssueDate(project, lines)
   );
+}
+
+export function getInvoiceIssueDate(project: Project, lines: ServiceLine[]): string | null {
+  if (project.defaultInvoiceDateMode === 'custom') {
+    return project.issueDate;
+  }
+
+  const latestServiceDate = lines
+    .map((line) => line.serviceDate)
+    .filter((date): date is string => Boolean(date))
+    .sort()
+    .slice(-1)[0];
+
+  if (!latestServiceDate) {
+    return project.issueDate;
+  }
+
+  if (project.defaultInvoiceDateMode === 'visit') {
+    return latestServiceDate;
+  }
+
+  return getMonthEnd(latestServiceDate);
 }
 
 export function formatCurrency(value: number, currency: string): string {
@@ -154,4 +181,14 @@ export function formatShortDate(dateText: string | null): string {
 
 export function formatFileDate(dateText: string | null): string {
   return String(dateText || '').replace(/-/g, '');
+}
+
+function getMonthEnd(dateText: string): string {
+  const date = new Date(`${dateText}T00:00:00+09:00`);
+  if (Number.isNaN(date.getTime())) return dateText;
+  const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  const year = monthEnd.getFullYear();
+  const month = String(monthEnd.getMonth() + 1).padStart(2, '0');
+  const day = String(monthEnd.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

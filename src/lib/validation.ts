@@ -7,6 +7,7 @@ export function validateProjectInput(input: {
   customerId: string;
   customerName: string;
   invoiceRecipient: string;
+  defaultInvoiceDateMode?: string;
 }): ValidationResult {
   if (!input.customerId.trim()) {
     return { ok: false, message: '顧客IDを入力してください。' };
@@ -16,6 +17,12 @@ export function validateProjectInput(input: {
   }
   if (!input.invoiceRecipient.trim()) {
     return { ok: false, message: '請求先を入力してください。' };
+  }
+  if (
+    input.defaultInvoiceDateMode &&
+    !['visit', 'monthEnd', 'custom'].includes(input.defaultInvoiceDateMode)
+  ) {
+    return { ok: false, message: '請求日タイプを選択してください。' };
   }
   return { ok: true };
 }

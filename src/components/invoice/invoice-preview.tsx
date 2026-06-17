@@ -6,6 +6,7 @@ import {
   formatDate,
   formatPlainCurrency,
   getDocumentNumber,
+  getInvoiceIssueDate,
   getReceiptIssueDate
 } from '../../lib/invoice/preview';
 
@@ -23,7 +24,7 @@ export function InvoicePreview({ config, project, lines, kind }: InvoicePreviewP
   const title = isReceipt ? '領収書' : '請求書';
   const topLabel = isReceipt ? '領収書番号' : '請求書番号';
   const topNumber = formatDocumentNumberForDisplay(getDocumentNumber(project, lines, kind));
-  const issueDate = isReceipt ? getReceiptIssueDate(project, lines) : project.issueDate;
+  const issueDate = isReceipt ? getReceiptIssueDate(project, lines) : getInvoiceIssueDate(project, lines);
   const message = isReceipt ? '下記のとおり領収いたしました。' : '下記のとおりご請求申し上げます。';
   const amountLabel = isReceipt ? '受領金額' : 'ご請求金額';
   const remarksText = [

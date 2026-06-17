@@ -1,4 +1,5 @@
 import { exportInvoiceCsvText } from '../../../../../lib/csv/export';
+import { getInvoiceIssueDate } from '../../../../../lib/invoice/preview';
 import { createExportJob, getProjectExportBundle } from '../../../../../lib/store/projects';
 
 export async function GET(
@@ -19,10 +20,14 @@ export async function GET(
       );
     }
 
-    const fileName = buildExportFileName(bundle.project);
+    const fileName = buildExportFileName(
+      bundle.project,
+      getInvoiceIssueDate(bundle.project, bundle.serviceLines)
+    );
     const csvText = exportInvoiceCsvText({
       projects: [bundle.project],
-      serviceLines: bundle.serviceLines
+      serviceLines: bundle.serviceLines,
+      invoiceSelections: bundle.invoiceSelections
     });
 
     await createExportJob({
@@ -50,9 +55,9 @@ export async function GET(
   }
 }
 
-function buildExportFileName(project: { customerId: string; customerName: string; issueDate: string | null }) {
+function buildExportFileName(project: { customerId: string; customerName: string }, issueDate?: string | null) {
   const name = sanitizeFilePart(project.customerName || project.customerId);
-  const month = String(project.issueDate || '').replace(/-/g, '').slice(0, 6) || 'undated';
+  const month = String(issueDate || '').replace(/-/g, '').slice(0, 6) || 'undated';
   return `invoice_project_${name}_${month}.csv`;
 }
 

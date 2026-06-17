@@ -1,5 +1,6 @@
 import { getProjectExportBundle, markProjectAsExported } from '../../../../../lib/store/projects';
-import { syncProjectToGoogleSheet } from '../../../../../lib/google-sheets';
+import { getGoogleSheetsErrorStatus, syncProjectToGoogleSheet } from '../../../../../lib/google-sheets';
+import { getGoogleSheetSetting } from '../../../../../lib/store/google-sheet-settings';
 
 export async function POST(
   _request: Request,
@@ -19,9 +20,26 @@ export async function POST(
       );
     }
 
+    const setting = await getGoogleSheetSetting(bundle.project.companyName);
+    if (!setting) {
+      return Response.json(
+        {
+          error: 'google_sheet_setting_not_found',
+          message: 'このショップの source スプレッドシート設定が未登録です。先にスプレッドシート設定を保存してください。'
+        },
+        { status: 404 }
+      );
+    }
+
     const result = await syncProjectToGoogleSheet({
       project: bundle.project,
-      serviceLines: bundle.serviceLines
+      serviceLines: bundle.serviceLines,
+      invoiceSelections: bundle.invoiceSelections,
+      target: {
+        spreadsheetId: setting.spreadsheetId,
+        sheetName: setting.sheetName,
+        historySheetName: setting.historySheetName
+      }
     });
 
     await markProjectAsExported(projectId);
@@ -34,12 +52,13 @@ export async function POST(
       rowCount: result.rowCount
     });
   } catch (error) {
+    const status = getGoogleSheetsErrorStatus(error) || 500;
     return Response.json(
       {
         error: 'failed_to_sync_google_sheet',
         message: error instanceof Error ? error.message : 'Unknown error'
       },
-      { status: 500 }
+      { status }
     );
   }
 }

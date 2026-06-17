@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -127,8 +127,6 @@ export function ProjectEditor({
   const router = useRouter();
   const invoicePrintRef = useRef<HTMLDivElement | null>(null);
   const receiptPrintRef = useRef<HTMLDivElement | null>(null);
-  const reorderCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const dragSessionRef = useRef<{ lineId: string; tab: ReorderTab } | null>(null);
   const [pending, startTransition] = useTransition();
   const [selectionSavePending, setSelectionSavePending] = useState(false);
   const [sheetSyncPending, setSheetSyncPending] = useState(false);
@@ -140,16 +138,6 @@ export function ProjectEditor({
     lineId: string;
     placement: 'before' | 'after';
   } | null>(null);
-  const dragOverTargetRef = useRef<{
-    lineId: string;
-    placement: 'before' | 'after';
-  } | null>(null);
-  const [dragDebug, setDragDebug] = useState({
-    phase: 'idle',
-    sourceLineId: '',
-    targetLineId: '',
-    placement: ''
-  });
   const [activeTab, setActiveTab] = useState<'uncollected' | 'invoice' | 'collected' | 'receipt'>(
     'uncollected'
   );
@@ -375,10 +363,6 @@ export function ProjectEditor({
     });
     return limitMonthGroups(Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0], 'ja')));
   }, [collectedLines]);
-
-  useEffect(() => {
-    dragOverTargetRef.current = dragOverTarget;
-  }, [dragOverTarget]);
 
   useEffect(() => {
     const nextHeader = {
@@ -928,110 +912,6 @@ export function ProjectEditor({
     });
   }
 
-  function getCardRefKey(tab: ReorderTab, lineId: string) {
-    return `${tab}:${lineId}`;
-  }
-
-  function findDragTarget(
-    clientY: number,
-    tab: ReorderTab,
-    sourceLineId: string
-  ): { lineId: string; placement: 'before' | 'after' } | null {
-    const lines = tab === 'uncollected' ? orderedUncollectedLines : orderedCollectedLines;
-
-    for (const line of lines) {
-      if (line.id === sourceLineId) continue;
-      const node = reorderCardRefs.current[getCardRefKey(tab, line.id)];
-      if (!node) continue;
-      const bounds = node.getBoundingClientRect();
-      if (clientY < bounds.top || clientY > bounds.bottom) continue;
-      return {
-        lineId: line.id,
-        placement: clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
-      };
-    }
-
-    return null;
-  }
-
-  function beginPointerReorder(
-    event: ReactPointerEvent<HTMLDivElement>,
-    lineId: string,
-    tab: ReorderTab,
-    canDrag: boolean
-  ) {
-    if (!canDrag || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    dragSessionRef.current = { lineId, tab };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setDraggingSelectedLineId(lineId);
-    setDragOverTarget(null);
-    setDragDebug({
-      phase: 'pointer_down',
-      sourceLineId: lineId,
-      targetLineId: '',
-      placement: ''
-    });
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const session = dragSessionRef.current;
-      if (!session) return;
-      const nextTarget = findDragTarget(moveEvent.clientY, session.tab, session.lineId);
-      if (!nextTarget) {
-        setDragDebug({
-          phase: 'dragging',
-          sourceLineId: session.lineId,
-          targetLineId: '',
-          placement: ''
-        });
-        setDragOverTarget(null);
-        return;
-      }
-
-      setDragDebug({
-        phase: 'drag_over',
-        sourceLineId: session.lineId,
-        targetLineId: nextTarget.lineId,
-        placement: nextTarget.placement
-      });
-      setDragOverTarget(nextTarget);
-    };
-
-    const handlePointerUp = async () => {
-      const session = dragSessionRef.current;
-      dragSessionRef.current = null;
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
-
-      if (!session) return;
-
-      setDragDebug((current) => ({
-        ...current,
-        phase: 'drag_end'
-      }));
-
-      const target = dragOverTargetRef.current;
-      setDraggingSelectedLineId('');
-      setDragOverTarget(null);
-
-      if (!target) return;
-
-      if (session.tab === 'uncollected') {
-        await moveSelectedLineByPlacement(session.lineId, target.lineId, target.placement);
-        return;
-      }
-
-      await moveSelectedCollectedLineByPlacement(session.lineId, target.lineId, target.placement);
-    };
-
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp, { once: true });
-    window.addEventListener('pointercancel', handlePointerUp, { once: true });
-  }
-
   async function createNewLine() {
     setMessage('');
     setError('');
@@ -1222,9 +1102,6 @@ export function ProjectEditor({
                     return (
                       <div
                         key={line.id}
-                        ref={(node) => {
-                          reorderCardRefs.current[getCardRefKey('uncollected', line.id)] = node;
-                        }}
                         className={`service-line-card${canDrag ? ' draggable-selected' : ''}${draggingSelectedLineId === line.id ? ' dragging' : ''
                           }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'before'
                             ? ' drop-before'
@@ -1233,10 +1110,55 @@ export function ProjectEditor({
                             ? ' drop-after'
                             : ''
                           }`}
-                        onPointerDown={(event) => {
-                          const target = event.target as HTMLElement;
-                          if (target.closest('button')) return;
-                          beginPointerReorder(event, line.id, 'uncollected', canDrag);
+                        draggable={canDrag}
+                        onDragStart={(event) => {
+                          if (!canDrag) {
+                            event.preventDefault();
+                            return;
+                          }
+                          event.dataTransfer.effectAllowed = 'move';
+                          event.dataTransfer.setData('text/plain', line.id);
+                          setDraggingSelectedLineId(line.id);
+                          setDragOverTarget(null);
+                        }}
+                        onDragOver={(event) => {
+                          if (!canDrag || !draggingSelectedLineId) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'move';
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          const placement =
+                            event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+                          setDragOverTarget((current) =>
+                            current?.lineId === line.id && current.placement === placement
+                              ? current
+                              : { lineId: line.id, placement }
+                          );
+                        }}
+                        onDrop={(event) => {
+                          if (!canDrag) return;
+                          event.preventDefault();
+                          const fromId = event.dataTransfer.getData('text/plain');
+                          const placement =
+                            dragOverTarget?.lineId === line.id ? dragOverTarget.placement : 'before';
+                          void moveSelectedLineByPlacement(fromId, line.id, placement);
+                          setDraggingSelectedLineId('');
+                          setDragOverTarget(null);
+                        }}
+                        onDragLeave={(event) => {
+                          const relatedTarget = event.relatedTarget;
+                          if (
+                            relatedTarget instanceof Node &&
+                            event.currentTarget.contains(relatedTarget)
+                          ) {
+                            return;
+                          }
+                          setDragOverTarget((current) =>
+                            current?.lineId === line.id ? null : current
+                          );
+                        }}
+                        onDragEnd={() => {
+                          setDraggingSelectedLineId('');
+                          setDragOverTarget(null);
                         }}
                       >
                         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -1256,17 +1178,10 @@ export function ProjectEditor({
                             {canDrag ? (
                               <div
                                 data-drag-handle="true"
-                                onPointerDown={(event) =>
-                                  beginPointerReorder(event, line.id, 'uncollected', canDrag)
-                                }
                                 onContextMenu={(event) => {
                                   event.preventDefault();
                                 }}
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  minHeight: 32,
-                                  paddingRight: 12,
                                   marginBottom: 8,
                                   color: 'var(--muted)',
                                   fontSize: 12,
@@ -1328,9 +1243,6 @@ export function ProjectEditor({
                 >
                   {selectionSavePending ? '選択を保存中...' : '選択を保存'}
                 </button>
-              </div>
-              <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
-                drag debug: {dragDebug.phase} / source: {dragDebug.sourceLineId || '-'} / target: {dragDebug.targetLineId || '-'}{dragDebug.placement ? ` (${dragDebug.placement})` : ''}
               </div>
             </>
           ) : null}
@@ -1421,9 +1333,6 @@ export function ProjectEditor({
                   return (
                     <div
                       key={line.id}
-                      ref={(node) => {
-                        reorderCardRefs.current[getCardRefKey('collected', line.id)] = node;
-                      }}
                       className={`service-line-card${canDrag ? ' draggable-selected' : ''}${draggingSelectedLineId === line.id ? ' dragging' : ''
                         }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'before'
                           ? ' drop-before'
@@ -1432,10 +1341,55 @@ export function ProjectEditor({
                           ? ' drop-after'
                           : ''
                         }`}
-                      onPointerDown={(event) => {
-                        const target = event.target as HTMLElement;
-                        if (target.closest('button')) return;
-                        beginPointerReorder(event, line.id, 'collected', canDrag);
+                      draggable={canDrag}
+                      onDragStart={(event) => {
+                        if (!canDrag) {
+                          event.preventDefault();
+                          return;
+                        }
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', line.id);
+                        setDraggingSelectedLineId(line.id);
+                        setDragOverTarget(null);
+                      }}
+                      onDragOver={(event) => {
+                        if (!canDrag || !draggingSelectedLineId) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        const placement =
+                          event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+                        setDragOverTarget((current) =>
+                          current?.lineId === line.id && current.placement === placement
+                            ? current
+                            : { lineId: line.id, placement }
+                        );
+                      }}
+                      onDrop={(event) => {
+                        if (!canDrag) return;
+                        event.preventDefault();
+                        const fromId = event.dataTransfer.getData('text/plain');
+                        const placement =
+                          dragOverTarget?.lineId === line.id ? dragOverTarget.placement : 'before';
+                        void moveSelectedCollectedLineByPlacement(fromId, line.id, placement);
+                        setDraggingSelectedLineId('');
+                        setDragOverTarget(null);
+                      }}
+                      onDragLeave={(event) => {
+                        const relatedTarget = event.relatedTarget;
+                        if (
+                          relatedTarget instanceof Node &&
+                          event.currentTarget.contains(relatedTarget)
+                        ) {
+                          return;
+                        }
+                        setDragOverTarget((current) =>
+                          current?.lineId === line.id ? null : current
+                        );
+                      }}
+                      onDragEnd={() => {
+                        setDraggingSelectedLineId('');
+                        setDragOverTarget(null);
                       }}
                     >
                       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -1455,17 +1409,10 @@ export function ProjectEditor({
                           {canDrag ? (
                             <div
                               data-drag-handle="true"
-                              onPointerDown={(event) =>
-                                beginPointerReorder(event, line.id, 'collected', canDrag)
-                              }
                               onContextMenu={(event) => {
                                 event.preventDefault();
                               }}
                               style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                minHeight: 32,
-                                paddingRight: 12,
                                 marginBottom: 8,
                                 color: 'var(--muted)',
                                 fontSize: 12,
@@ -1518,9 +1465,6 @@ export function ProjectEditor({
                 {collectedLines.length === 0 ? (
                   <p style={{ margin: 0 }}>回収済みの明細はまだありません。</p>
                 ) : null}
-              </div>
-              <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
-                drag debug: {dragDebug.phase} / source: {dragDebug.sourceLineId || '-'} / target: {dragDebug.targetLineId || '-'}{dragDebug.placement ? ` (${dragDebug.placement})` : ''}
               </div>
             </>
           ) : null}

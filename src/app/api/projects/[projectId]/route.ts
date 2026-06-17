@@ -1,4 +1,6 @@
 import { getProjectDetail, updateProjectHeader } from '../../../../lib/store/projects';
+import { normalizeCompanyName } from '../../../../lib/project-fields';
+import type { Project } from '../../../../types';
 
 export async function GET(
   _request: Request,
@@ -38,6 +40,7 @@ export async function PATCH(
     const { projectId } = await context.params;
     const body = (await request.json()) as {
       customerName?: string;
+      defaultInvoiceDateMode?: Project['defaultInvoiceDateMode'];
       invoiceRecipient?: string;
       facilityName?: string;
       companyName?: string;
@@ -49,9 +52,13 @@ export async function PATCH(
     const project = await updateProjectHeader({
       projectId,
       customerName: String(body.customerName || '').trim(),
+      defaultInvoiceDateMode: body.defaultInvoiceDateMode || 'monthEnd',
       invoiceRecipient: String(body.invoiceRecipient || '').trim(),
       facilityName: String(body.facilityName || '').trim(),
-      companyName: String(body.companyName || '').trim(),
+      companyName: normalizeCompanyName({
+        companyName: String(body.companyName || '').trim(),
+        invoiceRecipient: String(body.invoiceRecipient || '').trim()
+      }),
       issueDate: body.issueDate || null,
       defaultRemarks: String(body.defaultRemarks || '').trim(),
       status: body.status || 'draft'

@@ -11,13 +11,14 @@
 この repo では、次の流れが一通り動く前提まで進んでいます。
 
 1. CSV を取り込む
-2. 案件一覧を見る
-3. 案件ヘッダを編集する
-4. 明細を追加 / 編集 / 複製 / 削除する
-5. 未回収明細から請求対象を選ぶ
-6. 請求書 / 領収書プレビューを見る
-7. 案件単位で CSV を書き出す
-8. 案件単位で Google スプレッドシートへ保存する
+2. Google スプレッドシートから取り込む
+3. 案件一覧を見る
+4. 案件ヘッダを編集する
+5. 明細を追加 / 編集 / 複製 / 削除する
+6. 未回収明細から請求対象を選ぶ
+7. 請求書 / 領収書プレビューを見る
+8. 案件単位で CSV を書き出す
+9. 案件単位で Google スプレッドシートへ保存する
 
 ## 構成
 
@@ -54,9 +55,9 @@ Google Sheets を正本にする運用なら、まずは Google Sheets 用の en
 ```env
 GOOGLE_SERVICE_ACCOUNT_EMAIL=service-account@your-project.iam.gserviceaccount.com
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id
-GOOGLE_SHEETS_SHEET_NAME=invoices
 ```
+
+スプレッドシートの URL / ID、シート名、履歴シート名は `.env.local` ではなく `/projects` 画面から利用者ごとに保存します。
 
 PostgreSQL を併用する場合だけ、追加で次を設定します。
 
@@ -73,6 +74,30 @@ POSTGRES_SSL_MODE=require
 - デプロイのたびにお客様へ再承認を求める方式ではありません
 - PostgreSQL を使う場合、接続先は Azure 固定ではありません
 - DB 名は `konoyubi_invoices` のような `snake_case` を推奨します
+- 履歴シート名は `/projects` の設定画面で利用者ごとに指定できます。未入力時は `history` を使います
+
+Google Sheets 連携の初回セットアップ手順:
+
+1. `https://console.cloud.google.com/` で新しいプロジェクトを作成する
+2. `API とサービス` -> `ライブラリ` から `Google Sheets API` を有効化する
+3. `API とサービス` -> `認証情報` -> `認証情報を作成` を開く
+4. `Google Sheets API` / `アプリケーション データ` を選び、サービスアカウントを作成する
+5. 作成したサービスアカウントの `キー` タブで `新しいキーを作成` -> `JSON` を選ぶ
+6. ダウンロードした JSON の `client_email` を `GOOGLE_SERVICE_ACCOUNT_EMAIL` に入れる
+7. 同じ JSON の `private_key` を `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` に入れる
+8. 対象スプレッドシートをサービスアカウントのメールアドレスへ `編集者` として共有する
+9. `/projects` 画面で対象の利用者を選び、Google Sheets カードへスプレッドシート URL または ID を入れる
+10. 同じカードで対象タブ名を入れ、必要なら履歴シート名も入れて保存する
+
+`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` は複数行の鍵ですが、`.env.local` では `\n` を含む 1 行文字列として入れます。
+
+スプレッドシート共有時の確認ポイント:
+
+- 共有先には `.env.local` の `GOOGLE_SERVICE_ACCOUNT_EMAIL` に入れたメールアドレスをそのまま使います
+- 形式は `invoice-sync@your-project.iam.gserviceaccount.com` のようなサービスアカウントメールです
+- 権限は `編集者` を選びます
+- Google アカウント本人ではなく、サービスアカウントのメールアドレスに共有する必要があります
+- 共有後に `/projects` へ戻り、利用者別スプレッドシートカードで設定保存すると接続確認も兼ねられます
 
 ### 3. DB schema を流す
 
@@ -81,6 +106,23 @@ psql "$DATABASE_URL" -f db/schema.sql
 ```
 
 DB を使わない運用なら、この手順はスキップできます。
+
+### 将来の DB 移行について
+
+現在は、Google Sheets を正本にしつつ、環境によってはローカル保存で運用できます。
+
+- 1 台中心の試験運用では、DB なしでも進められます
+- 複数 PC で選択状態や並び順を共有したくなったタイミングで、PostgreSQL へ移行する想定です
+- PostgreSQL を使う場合、選択状態や請求対象の並び順は DB 側で共有されます
+
+移行の大まかな流れ:
+
+1. Azure Database for PostgreSQL などの PostgreSQL 接続先を用意する
+2. `.env.local` の `DATABASE_URL` を実値へ差し替える
+3. `db/schema.sql` を適用する
+4. 必要に応じて `.demo-invoices-local-store.json` の内容を DB へ移行する
+
+詳細な注意点や作業メモは [AGENT.md](/Users/eriko/dev/prj/demo-invoices/AGENT.md:1) を参照してください。
 
 ### 4. 開発サーバーを起動する
 
@@ -130,7 +172,7 @@ npm run dev
 
 ### 案件一覧
 
-- CSV 取込
+- Google スプレッドシート取込
 - 新規案件追加
 - 案件の件数サマリ確認
 
@@ -146,6 +188,11 @@ npm run dev
 - 請求書 / 領収書プレビュー
 - Google スプレッドシートへ直接保存
 - 案件単位 CSV 書き出し
+
+運用メモ:
+
+- 通常運用では画面上の取込導線を Google スプレッドシートのみに寄せています
+- CSV / Excel 取込の実装は後方互換のため残していますが、日常運用では使わない想定です
 
 ## CSV 列
 

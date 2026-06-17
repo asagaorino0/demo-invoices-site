@@ -1,5 +1,9 @@
-import { createProject, listProjectSummaries } from '../../../lib/store/projects';
+import { createProject, listProjectSummaries, markProjectAsExported } from '../../../lib/store/projects';
+import { normalizeCompanyName } from '../../../lib/project-fields';
 import { validateProjectInput } from '../../../lib/validation';
+import { getGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
+import { getGoogleSheetsErrorStatus, syncProjectToGoogleSheet } from '../../../lib/google-sheets';
+import type { Project } from '../../../types';
 
 export async function GET(): Promise<Response> {
   try {
@@ -25,6 +29,7 @@ export async function POST(request: Request): Promise<Response> {
     const body = (await request.json()) as {
       customerId?: string;
       customerName?: string;
+      defaultInvoiceDateMode?: Project['defaultInvoiceDateMode'];
       invoiceRecipient?: string;
       facilityName?: string;
       companyName?: string;
@@ -35,9 +40,13 @@ export async function POST(request: Request): Promise<Response> {
     const input = {
       customerId: String(body.customerId || '').trim(),
       customerName: String(body.customerName || '').trim(),
+      defaultInvoiceDateMode: body.defaultInvoiceDateMode || 'monthEnd',
       invoiceRecipient: String(body.invoiceRecipient || '').trim(),
       facilityName: String(body.facilityName || '').trim(),
-      companyName: String(body.companyName || '').trim(),
+      companyName: normalizeCompanyName({
+        companyName: String(body.companyName || '').trim(),
+        invoiceRecipient: String(body.invoiceRecipient || '').trim()
+      }),
       issueDate: body.issueDate || null,
       defaultRemarks: String(body.defaultRemarks || '').trim()
     };
@@ -50,8 +59,53 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const project = await createProject(input);
+    let message = '新規利用者を登録しました。';
+    let sheetSync: {
+      ok: boolean;
+      spreadsheetId?: string;
+      sheetName?: string;
+      rowCount?: number;
+      message?: string;
+    } | null = null;
 
-    return Response.json({ project }, { status: 201 });
+    const setting = input.companyName
+      ? await getGoogleSheetSetting(input.companyName).catch(() => null)
+      : null;
+
+    if (setting) {
+      try {
+        const result = await syncProjectToGoogleSheet({
+          project,
+          serviceLines: [],
+          invoiceSelections: [],
+          target: {
+            spreadsheetId: setting.spreadsheetId,
+            sheetName: setting.sheetName,
+            historySheetName: setting.historySheetName
+          }
+        });
+        await markProjectAsExported(project.id);
+        sheetSync = {
+          ok: true,
+          spreadsheetId: result.spreadsheetId,
+          sheetName: result.sheetName,
+          rowCount: result.rowCount,
+          message: `${result.rowCount} 行を Google Sheets に保存しました。`
+        };
+        message = '新規利用者を登録し、Google Sheets に保存しました。';
+      } catch (error) {
+        const status = getGoogleSheetsErrorStatus(error);
+        sheetSync = {
+          ok: false,
+          message: error instanceof Error ? error.message : 'Google Sheets への保存に失敗しました。'
+        };
+        if (status) {
+          message = '新規利用者は登録しましたが、Google Sheets への保存はできませんでした。';
+        }
+      }
+    }
+
+    return Response.json({ project, message, sheetSync }, { status: 201 });
   } catch (error) {
     return Response.json(
       {

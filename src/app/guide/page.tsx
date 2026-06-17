@@ -29,8 +29,8 @@ export default function GuidePage() {
           <h2>いまできること</h2>
           <ul>
             <li>CSV 取込</li>
-            <li>新規案件作成</li>
-            <li>案件ヘッダ編集</li>
+            <li>新規利用者登録</li>
+            <li>利用者情報編集</li>
             <li>明細の追加 / 編集 / 複製 / 削除</li>
             <li>月単位の請求対象選択</li>
             <li>請求書 / 領収書プレビュー</li>

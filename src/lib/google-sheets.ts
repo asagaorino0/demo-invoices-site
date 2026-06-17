@@ -1,17 +1,34 @@
 import { createSign } from 'node:crypto';
 import { exportInvoiceCsvRows } from './csv/export';
 import { normalizeHeader } from './csv/shared';
-import type { Project, ServiceLine } from '../types';
+import type { InvoiceSelection, Project, ServiceLine } from '../types';
 import { INVOICE_CSV_HEADERS, type InvoiceCsvRow } from '../types/csv';
 
 const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+
+class GoogleSheetsRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'GoogleSheetsRequestError';
+    this.status = status;
+  }
+}
 
 interface GoogleSheetsConfig {
   clientEmail: string;
   privateKey: string;
   spreadsheetId: string;
   sheetName: string;
+  historySheetName: string;
+}
+
+export interface GoogleSheetTarget {
+  spreadsheetId: string;
+  sheetName: string;
+  historySheetName?: string | null;
 }
 
 interface GoogleTokenResponse {
@@ -21,6 +38,8 @@ interface GoogleTokenResponse {
 export interface SyncProjectToGoogleSheetInput {
   project: Project;
   serviceLines: ServiceLine[];
+  invoiceSelections: InvoiceSelection[];
+  target: GoogleSheetTarget;
 }
 
 export interface SyncProjectToGoogleSheetResult {
@@ -29,17 +48,75 @@ export interface SyncProjectToGoogleSheetResult {
   rowCount: number;
 }
 
+export interface ReadGoogleSheetResult {
+  spreadsheetId: string;
+  sheetName: string;
+  values: string[][];
+}
+
+interface GoogleSheetHistoryRecord {
+  savedAt: string;
+  action: string;
+  projectId: string;
+  customerId: string;
+  customerName: string;
+  reservationId: string;
+  detailLabel: string;
+  changedFields: string;
+  changeSummary: string;
+  rowCount: string;
+}
+
+const HISTORY_HEADERS = [
+  'savedAt',
+  'action',
+  'projectId',
+  'customerId',
+  'customerName',
+  'reservationId',
+  'detailLabel',
+  'changedFields',
+  'changeSummary',
+  'rowCount'
+] as const;
+
+const HISTORY_FIELD_LABELS: Partial<Record<keyof InvoiceCsvRow | 'reservationId', string>> = {
+  userId: '顧客ID',
+  userName: '利用者名',
+  defaultInvoiceDateMode: '請求日タイプ',
+  invoiceRecipient: '請求先',
+  facilityName: '施設名',
+  companyName: '会社名',
+  reservationId: '明細',
+  date: 'サービス日',
+  service: 'サービス名',
+  staff: '担当',
+  price: '単価',
+  baseQuantity: '数量',
+  baseUnit: '単位',
+  taxIncluded: '税区分',
+  extraCharges: '追加料金',
+  outsourceUnitPrice: '外注単価',
+  outsourceUnitQuantity: '外注数量',
+  outsourceUnit: '外注単位',
+  outsourceUnitExtraCharges: '外注追加料金',
+  invoiceCode: '請求書番号',
+  invoiceDate: '請求日',
+  isCollected: '回収状態',
+  isCollectedDate: '回収日',
+  receiptIssueDate: '領収書発行日',
+  remarks: '備考',
+  memo: 'メモ',
+  visible: '表示'
+};
+
 export async function syncProjectToGoogleSheet(
   input: SyncProjectToGoogleSheetInput
 ): Promise<SyncProjectToGoogleSheetResult> {
-  const config = getGoogleSheetsConfig();
+  const config = getGoogleSheetsConfig(input.target);
   const accessToken = await fetchGoogleAccessToken(config);
   const range = `${toSheetRangePrefix(config.sheetName)}!A:ZZ`;
-  const existingValues = await fetchSheetValues({
-    accessToken,
-    spreadsheetId: config.spreadsheetId,
-    range
-  });
+  const existingValues = await readGoogleSheetValuesInternal(config, accessToken);
 
   const headerLabels = buildHeaderLabels(existingValues[0] || []);
   const headerKeys = headerLabels.map((value) => normalizeHeader(value));
@@ -49,12 +126,23 @@ export async function syncProjectToGoogleSheet(
     throw new Error('Google Sheets のヘッダに userId 列がありません。テンプレート列を確認してください。');
   }
 
+  const currentCustomerRows = existingValues
+    .slice(1)
+    .filter((row) => String(row[userIdIndex] || '').trim() === input.project.customerId);
   const existingDataRows = existingValues
     .slice(1)
     .filter((row) => String(row[userIdIndex] || '').trim() !== input.project.customerId);
   const exportedRows = exportInvoiceCsvRows({
     projects: [input.project],
-    serviceLines: input.serviceLines
+    serviceLines: input.serviceLines,
+    invoiceSelections: input.invoiceSelections
+  });
+  const historyRecords = buildHistoryRecords({
+    config,
+    project: input.project,
+    headerKeys,
+    previousRows: currentCustomerRows,
+    nextRows: exportedRows.map((row) => mapCsvRowToSheetRow(row, headerKeys))
   });
   const nextValues = [
     headerLabels,
@@ -65,13 +153,20 @@ export async function syncProjectToGoogleSheet(
   await clearSheetValues({
     accessToken,
     spreadsheetId: config.spreadsheetId,
-    range
+    range,
+    clientEmail: config.clientEmail
   });
   await updateSheetValues({
     accessToken,
     spreadsheetId: config.spreadsheetId,
     range: `${toSheetRangePrefix(config.sheetName)}!A1`,
-    values: nextValues
+    values: nextValues,
+    clientEmail: config.clientEmail
+  });
+  await appendHistoryRecords({
+    accessToken,
+    config,
+    records: historyRecords
   });
 
   return {
@@ -81,15 +176,83 @@ export async function syncProjectToGoogleSheet(
   };
 }
 
-function getGoogleSheetsConfig(): GoogleSheetsConfig {
+export async function readGoogleSheetValues(target: GoogleSheetTarget): Promise<ReadGoogleSheetResult> {
+  const config = getGoogleSheetsConfig(target);
+  const accessToken = await fetchGoogleAccessToken(config);
+  const values = await readGoogleSheetValuesInternal(config, accessToken);
+
+  return {
+    spreadsheetId: config.spreadsheetId,
+    sheetName: config.sheetName,
+    values
+  };
+}
+
+export async function readGoogleSheetCsvText(target: GoogleSheetTarget): Promise<{
+  spreadsheetId: string;
+  sheetName: string;
+  csvText: string;
+}> {
+  const result = await readGoogleSheetValues(target);
+  const csvText = `${result.values.map((row) => row.map(escapeCsvCell).join(',')).join('\n')}\n`;
+
+  return {
+    spreadsheetId: result.spreadsheetId,
+    sheetName: result.sheetName,
+    csvText
+  };
+}
+
+export async function verifyGoogleSheetTarget(target: GoogleSheetTarget): Promise<{
+  spreadsheetId: string;
+  sheetName: string;
+  historySheetName: string;
+  sheetExists: boolean;
+  headerRowCount: number;
+}> {
+  const config = getGoogleSheetsConfig(target);
+  const accessToken = await fetchGoogleAccessToken(config);
+  const metadata = await fetchSpreadsheetMetadata({
+    accessToken,
+    spreadsheetId: config.spreadsheetId,
+    clientEmail: config.clientEmail
+  });
+  const sheetExists = metadata.sheets.some((sheet) => sheet.properties?.title === config.sheetName);
+
+  if (!sheetExists) {
+    throw new Error(`指定したシート "${config.sheetName}" が見つかりません。`);
+  }
+
+  const values = await readGoogleSheetValuesInternal(config, accessToken);
+  buildHeaderLabels(values[0] || []);
+
+  return {
+    spreadsheetId: config.spreadsheetId,
+    sheetName: config.sheetName,
+    historySheetName: config.historySheetName,
+    sheetExists,
+    headerRowCount: values[0]?.length || 0
+  };
+}
+
+export function getGoogleSheetsErrorStatus(error: unknown): number | null {
+  if (error instanceof GoogleSheetsRequestError) {
+    return error.status;
+  }
+
+  return null;
+}
+
+function getGoogleSheetsConfig(target: GoogleSheetTarget): GoogleSheetsConfig {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '';
-  const sheetName = process.env.GOOGLE_SHEETS_SHEET_NAME || '';
+  const spreadsheetId = String(target.spreadsheetId || '').trim();
+  const sheetName = String(target.sheetName || '').trim();
+  const historySheetName = String(target.historySheetName || '').trim() || 'history';
 
   if (!clientEmail || !privateKey || !spreadsheetId || !sheetName) {
     throw new Error(
-      'Google Sheets 連携の設定が不足しています。.env.local に GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY / GOOGLE_SHEETS_SPREADSHEET_ID / GOOGLE_SHEETS_SHEET_NAME を設定してください。'
+      'Google Sheets 連携の設定が不足しています。.env.local に GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY を設定し、対象ユーザーのスプレッドシート設定を保存してください。'
     );
   }
 
@@ -97,7 +260,8 @@ function getGoogleSheetsConfig(): GoogleSheetsConfig {
     clientEmail,
     privateKey: privateKey.replace(/\\n/g, '\n'),
     spreadsheetId,
-    sheetName
+    sheetName,
+    historySheetName
   };
 }
 
@@ -156,6 +320,7 @@ async function fetchSheetValues(input: {
   accessToken: string;
   spreadsheetId: string;
   range: string;
+  clientEmail?: string;
 }): Promise<string[][]> {
   const url = new URL(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}`
@@ -174,17 +339,59 @@ async function fetchSheetValues(input: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Google Sheets の読込に失敗しました: ${text}`);
+    throw buildGoogleSheetsApiError('Google Sheets の読込に失敗しました。', response.status, text, input.clientEmail);
   }
 
   const data = (await response.json()) as { values?: string[][] };
   return Array.isArray(data.values) ? data.values : [];
 }
 
+async function fetchSpreadsheetMetadata(input: {
+  accessToken: string;
+  spreadsheetId: string;
+  clientEmail?: string;
+}): Promise<{ sheets: Array<{ properties?: { title?: string } }> }> {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}?fields=sheets.properties.title`,
+    {
+      headers: {
+        authorization: `Bearer ${input.accessToken}`
+      },
+      cache: 'no-store'
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildGoogleSheetsApiError(
+      'Google Sheets のメタデータ取得に失敗しました。',
+      response.status,
+      text,
+      input.clientEmail
+    );
+  }
+
+  return (await response.json()) as { sheets: Array<{ properties?: { title?: string } }> };
+}
+
+async function readGoogleSheetValuesInternal(
+  config: GoogleSheetsConfig,
+  accessToken: string
+): Promise<string[][]> {
+  const range = `${toSheetRangePrefix(config.sheetName)}!A:ZZ`;
+  return fetchSheetValues({
+    accessToken,
+    spreadsheetId: config.spreadsheetId,
+    range,
+    clientEmail: config.clientEmail
+  });
+}
+
 async function clearSheetValues(input: {
   accessToken: string;
   spreadsheetId: string;
   range: string;
+  clientEmail?: string;
 }): Promise<void> {
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}:clear`,
@@ -200,7 +407,7 @@ async function clearSheetValues(input: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Google Sheets のクリアに失敗しました: ${text}`);
+    throw buildGoogleSheetsApiError('Google Sheets のクリアに失敗しました。', response.status, text, input.clientEmail);
   }
 }
 
@@ -209,6 +416,7 @@ async function updateSheetValues(input: {
   spreadsheetId: string;
   range: string;
   values: string[][];
+  clientEmail?: string;
 }): Promise<void> {
   const url = new URL(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}`
@@ -229,7 +437,69 @@ async function updateSheetValues(input: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Google Sheets の更新に失敗しました: ${text}`);
+    throw buildGoogleSheetsApiError('Google Sheets の更新に失敗しました。', response.status, text, input.clientEmail);
+  }
+}
+
+async function appendSheetValues(input: {
+  accessToken: string;
+  spreadsheetId: string;
+  range: string;
+  values: string[][];
+  clientEmail?: string;
+}): Promise<void> {
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}:append`
+  );
+  url.searchParams.set('valueInputOption', 'RAW');
+  url.searchParams.set('insertDataOption', 'INSERT_ROWS');
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${input.accessToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      majorDimension: 'ROWS',
+      values: input.values
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildGoogleSheetsApiError('Google Sheets の追記に失敗しました。', response.status, text, input.clientEmail);
+  }
+}
+
+async function batchUpdateSpreadsheet(input: {
+  accessToken: string;
+  spreadsheetId: string;
+  requests: unknown[];
+  clientEmail?: string;
+}): Promise<void> {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${input.accessToken}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: input.requests
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildGoogleSheetsApiError(
+      'Google Sheets のシート更新に失敗しました。',
+      response.status,
+      text,
+      input.clientEmail
+    );
   }
 }
 
@@ -258,6 +528,299 @@ function mapCsvRowToSheetRow(row: InvoiceCsvRow, headerKeys: string[]): string[]
   });
 }
 
+async function appendHistoryRecords(input: {
+  accessToken: string;
+  config: GoogleSheetsConfig;
+  records: GoogleSheetHistoryRecord[];
+}): Promise<void> {
+  if (input.records.length === 0) return;
+
+  await ensureSheetExists(
+    input.accessToken,
+    input.config.spreadsheetId,
+    input.config.historySheetName,
+    input.config.clientEmail
+  );
+  const range = `${toSheetRangePrefix(input.config.historySheetName)}!A:J`;
+  const existingValues = await fetchSheetValues({
+    accessToken: input.accessToken,
+    spreadsheetId: input.config.spreadsheetId,
+    range,
+    clientEmail: input.config.clientEmail
+  });
+
+  const headerRow = Array.from(HISTORY_HEADERS);
+  const shouldRewriteHeader =
+    existingValues.length === 0 ||
+    headerRow.some((header, index) => String(existingValues[0]?.[index] || '') !== header);
+
+  if (shouldRewriteHeader) {
+    await updateSheetValues({
+      accessToken: input.accessToken,
+      spreadsheetId: input.config.spreadsheetId,
+      range: `${toSheetRangePrefix(input.config.historySheetName)}!A1`,
+      clientEmail: input.config.clientEmail,
+      values: [
+        headerRow,
+        ...input.records.map((record) => mapHistoryRecordToRow(record)),
+        ...existingValues.slice(1)
+      ]
+    });
+    return;
+  }
+
+  await appendSheetValues({
+    accessToken: input.accessToken,
+    spreadsheetId: input.config.spreadsheetId,
+    range,
+    values: input.records.map((record) => mapHistoryRecordToRow(record)),
+    clientEmail: input.config.clientEmail
+  });
+}
+
+async function ensureSheetExists(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  clientEmail?: string
+): Promise<void> {
+  const metadata = await fetchSpreadsheetMetadata({ accessToken, spreadsheetId, clientEmail });
+  const exists = metadata.sheets.some((sheet) => sheet.properties?.title === sheetName);
+
+  if (exists) return;
+
+  await batchUpdateSpreadsheet({
+    accessToken,
+    spreadsheetId,
+    clientEmail,
+    requests: [
+      {
+        addSheet: {
+          properties: {
+            title: sheetName
+          }
+        }
+      }
+    ]
+  });
+}
+
+function buildGoogleSheetsApiError(
+  prefix: string,
+  fallbackStatus: number,
+  rawText: string,
+  clientEmail?: string
+): Error {
+  const parsed = parseGoogleApiError(rawText);
+  const status = parsed.code ?? fallbackStatus;
+
+  if (status === 403) {
+    const accountHint = clientEmail
+      ? `サービスアカウント ${clientEmail} を対象スプレッドシートへ「編集者」として共有してください。`
+      : '対象スプレッドシートをサービスアカウントへ「編集者」として共有してください。';
+    return new GoogleSheetsRequestError(
+      `${prefix} Google Sheets へのアクセス権がありません。${accountHint}${parsed.message ? ` Google API: ${parsed.message}` : ''}`,
+      status
+    );
+  }
+
+  if (status === 404) {
+    return new GoogleSheetsRequestError(
+      `${prefix} スプレッドシートまたはシートが見つかりません。URL / ID とシート名を確認してください。`,
+      status
+    );
+  }
+
+  return new GoogleSheetsRequestError(
+    `${prefix}${parsed.message ? ` ${parsed.message}` : ` ${rawText}`}`,
+    status
+  );
+}
+
+function parseGoogleApiError(rawText: string): { code?: number; message?: string } {
+  try {
+    const parsed = JSON.parse(rawText) as {
+      error?: {
+        code?: number;
+        message?: string;
+      };
+    };
+
+    return {
+      code: parsed.error?.code,
+      message: parsed.error?.message
+    };
+  } catch {
+    return {
+      message: rawText
+    };
+  }
+}
+
+function buildHistoryRecords(input: {
+  config: GoogleSheetsConfig;
+  project: Project;
+  headerKeys: string[];
+  previousRows: string[][];
+  nextRows: string[][];
+}): GoogleSheetHistoryRecord[] {
+  const diff = diffSheetRows(input.headerKeys, input.previousRows, input.nextRows);
+  const savedAt = formatHistoryTimestamp(new Date());
+
+  if (diff.records.length === 0) {
+    return [
+      {
+        savedAt,
+        action: '同期',
+        projectId: input.project.id,
+        customerId: input.project.customerId,
+        customerName: input.project.customerName,
+        reservationId: '',
+        detailLabel: '変更なし',
+        changedFields: '',
+        changeSummary: '変更なし',
+        rowCount: String(input.nextRows.length)
+      }
+    ];
+  }
+
+  return diff.records.map((record) => ({
+    savedAt,
+    action: record.action,
+    projectId: input.project.id,
+    customerId: input.project.customerId,
+    customerName: input.project.customerName,
+    reservationId: record.reservationId,
+    detailLabel: record.detailLabel,
+    changedFields: record.changedFields.map(formatHistoryFieldLabel).join(', '),
+    changeSummary: record.changeSummary.join(' | '),
+    rowCount: String(input.nextRows.length)
+  }));
+}
+
+function diffSheetRows(
+  headerKeys: string[],
+  previousRows: string[][],
+  nextRows: string[][]
+): {
+  records: Array<{
+    action: string;
+    reservationId: string;
+    detailLabel: string;
+    changedFields: string[];
+    changeSummary: string[];
+  }>;
+} {
+  const previousMap = buildReservationRowMap(headerKeys, previousRows);
+  const nextMap = buildReservationRowMap(headerKeys, nextRows);
+  const reservationIds = Array.from(new Set([...previousMap.keys(), ...nextMap.keys()])).sort((a, b) =>
+    a.localeCompare(b, 'ja')
+  );
+  const records: Array<{
+    action: string;
+    reservationId: string;
+    detailLabel: string;
+    changedFields: string[];
+    changeSummary: string[];
+  }> = [];
+
+  for (const reservationId of reservationIds) {
+    const previous = previousMap.get(reservationId);
+    const next = nextMap.get(reservationId);
+
+    if (!previous && next) {
+      records.push({
+        action: '新規作成',
+        reservationId,
+        detailLabel: describeHistoryRow(next, reservationId),
+        changedFields: ['reservationId'],
+        changeSummary: [`明細追加: ${describeHistoryRow(next, reservationId)}`]
+      });
+      continue;
+    }
+
+    if (previous && !next) {
+      records.push({
+        action: '削除',
+        reservationId,
+        detailLabel: describeHistoryRow(previous, reservationId),
+        changedFields: ['reservationId'],
+        changeSummary: [`明細削除: ${describeHistoryRow(previous, reservationId)}`]
+      });
+      continue;
+    }
+
+    if (!previous || !next) continue;
+
+    const changedFields = new Set<string>();
+    const changeSummary: string[] = [];
+    for (const headerKey of headerKeys) {
+      if (!headerKey) continue;
+      const before = previous[headerKey] || '';
+      const after = next[headerKey] || '';
+      if (before === after) continue;
+
+      changedFields.add(headerKey);
+      if (changeSummary.length < 20) {
+        changeSummary.push(
+          `${describeHistoryRow(next, reservationId)} / ${formatHistoryFieldLabel(headerKey)}: ${formatHistoryValue(
+            headerKey,
+            before
+          )} -> ${formatHistoryValue(headerKey, after)}`
+        );
+      }
+    }
+
+    if (changedFields.size > 0) {
+      records.push({
+        action: '更新',
+        reservationId,
+        detailLabel: describeHistoryRow(next, reservationId),
+        changedFields: Array.from(changedFields),
+        changeSummary
+      });
+    }
+  }
+
+  return {
+    records
+  };
+}
+
+function buildReservationRowMap(headerKeys: string[], rows: string[][]): Map<string, Record<string, string>> {
+  const reservationIdIndex = headerKeys.indexOf('reservationId');
+  const map = new Map<string, Record<string, string>>();
+
+  for (const row of rows) {
+    const reservationId = String(row[reservationIdIndex] || '').trim();
+    if (!reservationId) continue;
+
+    const record: Record<string, string> = {};
+    headerKeys.forEach((headerKey, index) => {
+      if (!headerKey) return;
+      record[headerKey] = String(row[index] || '');
+    });
+    map.set(reservationId, record);
+  }
+
+  return map;
+}
+
+function mapHistoryRecordToRow(record: GoogleSheetHistoryRecord): string[] {
+  return [
+    record.savedAt,
+    record.action,
+    record.projectId,
+    record.customerId,
+    record.customerName,
+    record.reservationId,
+    record.detailLabel,
+    record.changedFields,
+    record.changeSummary,
+    record.rowCount
+  ];
+}
+
 function toSheetRangePrefix(sheetName: string): string {
   return `'${sheetName.replace(/'/g, "''")}'`;
 }
@@ -265,4 +828,61 @@ function toSheetRangePrefix(sheetName: string): string {
 function toBase64Url(input: string | Buffer): string {
   const base64 = Buffer.from(input).toString('base64');
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function escapeCsvCell(value: string): string {
+  const text = String(value ?? '');
+  if (!/[",\n\r]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function truncateForHistory(value: string): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= 40) return text;
+  return `${text.slice(0, 37)}...`;
+}
+
+function formatHistoryTimestamp(date: Date): string {
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date);
+}
+
+function formatHistoryFieldLabel(headerKey: string): string {
+  return HISTORY_FIELD_LABELS[headerKey as keyof typeof HISTORY_FIELD_LABELS] || headerKey;
+}
+
+function formatHistoryValue(headerKey: string, value: string): string {
+  const text = String(value || '').trim();
+
+  if (headerKey === 'taxIncluded') {
+    if (text === 'TRUE') return '内税';
+    if (text === 'FALSE') return '外税';
+  }
+
+  if (headerKey === 'visible') {
+    if (text === 'TRUE') return '表示';
+    if (text === 'FALSE') return '非表示';
+  }
+
+  if (headerKey === 'isCollected') {
+    if (text === 'TRUE') return '回収済';
+    if (text === 'FALSE') return '未回収';
+  }
+
+  return truncateForHistory(text || '(空)');
+}
+
+function describeHistoryRow(row: Record<string, string>, fallbackReservationId: string): string {
+  const serviceDate = row.date || '日付未設定';
+  const serviceName = row.service || 'サービス名未設定';
+  const reservationId = row.reservationId || fallbackReservationId;
+  return `${serviceDate} / ${serviceName} / ${reservationId}`;
 }

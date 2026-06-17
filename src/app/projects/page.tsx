@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { listProjectSummaries, getProjectDetail } from '../../lib/store/projects';
-import type { ProjectSummary } from '../../types';
+import { getProjectStatusLabel, type ProjectSummary } from '../../types';
 import { ImportPanel } from './import-panel';
 import { CreateProjectPanel } from './create-project-panel';
 import { ProjectEditor } from './[projectId]/project-editor';
 import { loadSiteConfig } from '../../lib/site-config';
+import { getGoogleSheetSetting, listGoogleSheetSettings } from '../../lib/store/google-sheet-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,20 +24,57 @@ export default async function ProjectsPage({
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const customerGroups = buildCustomerGroups(projects);
+  const allCustomerGroups = buildCustomerGroups(projects);
+  const selectedContextProjectId =
+    resolvedSearchParams?.projectId || allCustomerGroups[0]?.project.id || projects[0]?.id || '';
+  const selectedContextGroup =
+    allCustomerGroups.find((group) => group.project.id === selectedContextProjectId) || null;
+  const selectedContextBundle = selectedContextProjectId
+    ? await getProjectDetail(selectedContextProjectId).catch(() => ({
+      project: null,
+      serviceLines: [],
+      invoiceSelections: []
+    }))
+    : null;
+  const selectedContextCompanyName =
+    selectedContextGroup?.companyName || selectedContextBundle?.project?.companyName || '';
+  const googleSheetSettings = await listGoogleSheetSettings().catch(() => []);
+  const selectedGoogleSheetSetting = selectedContextCompanyName
+    ? await getGoogleSheetSetting(selectedContextCompanyName).catch(() => null)
+    : null;
+  const hasSourceSpreadsheetSetting = Boolean(selectedGoogleSheetSetting);
+  const visibleProjects = hasSourceSpreadsheetSetting
+    ? filterProjectsByConfiguredShops(projects, googleSheetSettings)
+    : [];
+  const customerGroups = buildCustomerGroups(visibleProjects);
+  const requestedProjectId = resolvedSearchParams?.projectId || '';
+  const visibleProjectIds = new Set(customerGroups.map((group) => group.project.id));
   const selectedProjectId =
-    resolvedSearchParams?.projectId || customerGroups[0]?.project.id || projects[0]?.id || '';
-  const config = selectedProjectId ? await loadSiteConfig() : null;
-  const selectedBundle = selectedProjectId
-    ? await getProjectDetail(selectedProjectId).catch(() => ({
+    hasSourceSpreadsheetSetting
+      ? visibleProjectIds.has(requestedProjectId)
+        ? requestedProjectId
+        : customerGroups[0]?.project.id || visibleProjects[0]?.id || ''
+      : '';
+  const manualProjectCanOpen = Boolean(!hasSourceSpreadsheetSetting && selectedContextBundle?.project);
+  const activeProjectId = hasSourceSpreadsheetSetting ? selectedProjectId : manualProjectCanOpen ? selectedContextProjectId : '';
+  const config = activeProjectId ? await loadSiteConfig() : null;
+  const selectedBundle = hasSourceSpreadsheetSetting
+    ? activeProjectId
+      ? await getProjectDetail(activeProjectId).catch(() => ({
         project: null,
         serviceLines: [],
         invoiceSelections: []
       }))
-    : null;
+      : null
+    : manualProjectCanOpen
+      ? selectedContextBundle
+      : null;
 
-  const selectedCustomerGroup =
-    customerGroups.find((group) => group.project.id === selectedProjectId) || null;
+  const selectedCustomerGroup = hasSourceSpreadsheetSetting
+    ? customerGroups.find((group) => group.project.id === activeProjectId) || null
+    : manualProjectCanOpen
+      ? selectedContextGroup
+      : null;
   const totalUncollected = customerGroups.reduce((sum, group) => sum + group.uncollectedCount, 0);
   const totalCollected = customerGroups.reduce((sum, group) => sum + group.collectedCount, 0);
   const totalSelected = customerGroups.reduce((sum, group) => sum + group.selectedCount, 0);
@@ -65,81 +103,88 @@ export default async function ProjectsPage({
 
       <section className="workbench-layout">
         <aside className="workbench-sidebar">
-          <section className="card">
-            <p className="eyebrow" style={{ marginBottom: 14 }}>
-              件数
-            </p>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: 12
-              }}
-            >
-              <StatCard label="利用者" value={String(customerGroups.length)} />
-              <StatCard label="未回収件数" value={String(totalUncollected)} />
-              <StatCard label="回収済件数" value={String(totalCollected)} />
-              <StatCard label="請求対象" value={String(totalSelected)} />
-            </div>
-          </section>
-
-          <ImportPanel />
+          <ImportPanel
+            key={`${selectedContextGroup?.customerId || 'no-customer'}:${selectedContextGroup?.companyName || ''}`}
+            companyName={selectedContextCompanyName}
+            initialSetting={selectedGoogleSheetSetting}
+          />
+          {hasSourceSpreadsheetSetting ? (
+            <section className="card">
+              <p className="eyebrow" style={{ marginBottom: 14 }}>
+                件数
+              </p>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 12
+                }}
+              >
+                <StatCard label="利用者" value={String(customerGroups.length)} />
+                <StatCard label="未回収件数" value={String(totalUncollected)} />
+                <StatCard label="回収済件数" value={String(totalCollected)} />
+                <StatCard label="請求対象" value={String(totalSelected)} />
+              </div>
+            </section>
+          ) : null}
           <CreateProjectPanel />
 
-          <section className="card">
-            <p className="eyebrow" style={{ marginBottom: 14 }}>
-              利用者
-            </p>
-
-            {customerGroups.length === 0 ? (
-              <p style={{ margin: 0 }}>
-                まだ案件がありません。まずは CSV を取り込むか、下のフォームから新規案件を作成してください。
+          {hasSourceSpreadsheetSetting ? (
+            <section className="card">
+              <p className="eyebrow" style={{ marginBottom: 14 }}>
+                利用者
               </p>
-            ) : (
-              <div style={{ display: 'grid', gap: 12 }}>
-                {customerGroups.map((group) => {
-                  const active = group.project.id === selectedProjectId;
-                  return (
-                    <Link
-                      key={group.customerId}
-                      href={`/projects?projectId=${group.project.id}`}
-                      style={{
-                        display: 'block',
-                        padding: 16,
-                        borderRadius: 22,
-                        textDecoration: 'none',
-                        border: active
-                          ? '2px solid rgba(109, 19, 68, 0.6)'
-                          : '1px solid var(--line)',
-                        background: active ? 'rgba(247, 236, 242, 0.95)' : 'rgba(255,255,255,0.7)',
-                        boxShadow: active ? '0 10px 24px rgba(109, 19, 68, 0.08)' : 'none'
-                      }}
-                    >
-                      <div
+
+              {customerGroups.length === 0 ? (
+                <p style={{ margin: 0 }}>
+                  まだ利用者がありません。まずは CSV を取り込むか、下のフォームから新規利用者を登録してください。
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {customerGroups.map((group) => {
+                    const active = group.project.id === selectedProjectId;
+                    return (
+                      <Link
+                        key={group.customerId}
+                        href={`/projects?projectId=${group.project.id}`}
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          alignItems: 'flex-start'
+                          display: 'block',
+                          padding: 16,
+                          borderRadius: 22,
+                          textDecoration: 'none',
+                          border: active
+                            ? '2px solid rgba(109, 19, 68, 0.6)'
+                            : '1px solid var(--line)',
+                          background: active ? 'rgba(247, 236, 242, 0.95)' : 'rgba(255,255,255,0.7)',
+                          boxShadow: active ? '0 10px 24px rgba(109, 19, 68, 0.08)' : 'none'
                         }}
                       >
-                        <div>
-                          <div style={{ fontSize: 18, fontWeight: 800 }}>{group.customerName}</div>
-                          <div style={{ color: 'var(--muted)', marginTop: 6 }}>
-                            {group.invoiceRecipient}
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            alignItems: 'flex-start'
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 16, fontWeight: 700 }}>{group.customerName}</div>
+                            <div style={{ color: 'var(--muted)', marginTop: 6 }}>
+                              {group.invoiceRecipient}
+                            </div>
                           </div>
+                          <StatusPill status={group.project.status} />
                         </div>
-                        <StatusPill status={group.project.status} />
-                      </div>
-                      <div style={{ color: 'var(--muted)', marginTop: 10 }}>
-                        未回収 {group.uncollectedCount}件 / 請求対象 {group.selectedCount}件
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                        <div style={{ color: 'var(--muted)', marginTop: 10 }}>
+                          未回収 {group.uncollectedCount}件 / 請求対象 {group.selectedCount}件
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          ) : null}
         </aside>
 
         <section className="workbench-main">
@@ -190,21 +235,26 @@ export default async function ProjectsPage({
               </section>
 
               <ProjectEditor
+                key={selectedBundle.project.id}
                 config={config}
                 project={selectedBundle.project}
                 serviceLines={selectedBundle.serviceLines}
                 invoiceSelections={selectedBundle.invoiceSelections}
               />
             </>
+          ) : !hasSourceSpreadsheetSetting ? (
+            <section className="card">
+              <h2 style={{ marginBottom: 10 }}>先にスプレッドシート設定をしてください</h2>
+              <p style={{ marginBottom: 0 }}>
+                スプレッドシートが未設定の間は、案件一覧や利用者一覧は表示しません。上のカードで設定してから取り込みを進めてください。
+              </p>
+            </section>
           ) : (
             <section className="card">
-              <h2 style={{ marginBottom: 10 }}>まずは左から始めてください</h2>
-              <p>
-                CSV を取り込むか、新規案件を作成すると、ここに請求書作成の編集画面が表示されます。
-              </p>
+              <h2 style={{ marginBottom: 10 }}>次は取り込みです</h2>
               <p style={{ marginBottom: 0 }}>
-                操作の流れ: `CSV 取込` → `利用者を選ぶ` → `請求対象を選ぶ` → `プレビュー確認`
-                → `CSV 書き出し`
+                スプレッドシート設定は保存されています。まだ取り込み前なので案件は表示していません。左の
+                `スプレッドシートから取り込む` を実行してください。
               </p>
             </section>
           )}
@@ -221,6 +271,7 @@ function buildCustomerGroups(projects: ProjectSummary[]) {
       customerId: string;
       customerName: string;
       invoiceRecipient: string;
+      companyName: string;
       uncollectedCount: number;
       collectedCount: number;
       selectedCount: number;
@@ -235,6 +286,7 @@ function buildCustomerGroups(projects: ProjectSummary[]) {
         customerId: project.customerId,
         customerName: project.customerName,
         invoiceRecipient: project.invoiceRecipient,
+        companyName: project.companyName,
         uncollectedCount: project.uncollectedCount,
         collectedCount: project.collectedCount,
         selectedCount: project.selectedCount,
@@ -254,6 +306,19 @@ function buildCustomerGroups(projects: ProjectSummary[]) {
   return Array.from(groups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName, 'ja'));
 }
 
+function filterProjectsByConfiguredShops(projects: ProjectSummary[], settings: { shopKey: string; updatedAt: string }[]) {
+  if (settings.length === 0) {
+    return [];
+  }
+
+  const settingsByShopKey = new Map(settings.map((setting) => [setting.shopKey, setting.updatedAt]));
+  return projects.filter((project) => {
+    const settingUpdatedAt = settingsByShopKey.get(project.companyName);
+    if (!settingUpdatedAt) return false;
+    return (project.lastImportedAt || '') >= settingUpdatedAt;
+  });
+}
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div
@@ -265,7 +330,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
       }}
     >
       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: '#6d1344' }}>{value}</div>
+      <div style={{ fontSize: 22, fontWeight: 400, color: '#6d1344' }}>{value}</div>
     </div>
   );
 }
@@ -290,28 +355,26 @@ function InlineStat({ label, value }: { label: string; value: string }) {
 }
 
 function StatusPill({ status }: { status: ProjectSummary['status'] }) {
-  const label =
-    status === 'draft'
-      ? '編集中'
-      : status === 'ready_for_export'
-        ? '書き出し前'
-        : '書き出し済み';
+  const label = getProjectStatusLabel(status);
 
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '7px 10px',
-        borderRadius: 999,
-        background: 'rgba(109, 19, 68, 0.09)',
-        color: '#6d1344',
-        fontSize: 12,
-        fontWeight: 800,
-        whiteSpace: 'nowrap'
-      }}
-    >
-      {label}
-    </span>
+    status === 'draft'
+      ? null
+      :
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '7px 10px',
+          borderRadius: 999,
+          background: 'rgba(109, 19, 68, 0.09)',
+          color: '#6d1344',
+          fontSize: 12,
+          fontWeight: 700,
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {label}
+      </span>
   );
 }

@@ -6,12 +6,15 @@ export async function POST(
 ): Promise<Response> {
   try {
     const { projectId } = await context.params;
-    const body = (await request.json()) as { selectedLineIds?: string[] };
+    const body = (await request.json()) as { selectedLineIds?: string[]; orderedLineIds?: string[] };
     const selectedLineIds = Array.isArray(body.selectedLineIds)
       ? body.selectedLineIds.filter(Boolean)
       : [];
+    const orderedLineIds = Array.isArray(body.orderedLineIds)
+      ? body.orderedLineIds.filter(Boolean)
+      : [];
 
-    const result = await replaceProjectSelections(projectId, selectedLineIds);
+    const result = await replaceProjectSelections(projectId, selectedLineIds, orderedLineIds);
     return Response.json(result);
   } catch (error) {
     return Response.json(

@@ -15,6 +15,7 @@ import {
   insertProjectSql,
   insertServiceLineSql,
   markProjectExportedSql,
+  markProjectDraftSql,
   projectDetailSql,
   projectSelectionsSql,
   projectServiceLinesSql,
@@ -35,6 +36,7 @@ export interface ProjectDetailBundle {
 
 export interface PersistImportInput {
   importId: string;
+  replaceCompanyNames?: string[];
   sourceName: string;
   sourceType: 'csv' | 'xlsx' | 'json' | 'manual';
   rowCount: number;
@@ -54,6 +56,7 @@ export interface PersistImportResult {
 export interface UpdateProjectHeaderInput {
   projectId: string;
   customerName: string;
+  defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
   invoiceRecipient: string;
   facilityName: string;
   companyName: string;
@@ -83,11 +86,13 @@ export interface UpdateServiceLineInput {
 export interface ProjectExportBundle {
   project: Project;
   serviceLines: ServiceLine[];
+  invoiceSelections: InvoiceSelection[];
 }
 
 export interface CreateProjectInput {
   customerId: string;
   customerName: string;
+  defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
   invoiceRecipient: string;
   facilityName: string;
   companyName: string;
@@ -150,7 +155,9 @@ export async function getProjectDetail(projectId: string): Promise<ProjectDetail
       serviceLines: store.serviceLines
         .filter((line) => line.projectId === projectId)
         .sort((a, b) => (b.sortKey || 0) - (a.sortKey || 0)),
-      invoiceSelections: store.invoiceSelections.filter((selection) => selection.projectId === projectId)
+      invoiceSelections: store.invoiceSelections
+        .filter((selection) => selection.projectId === projectId)
+        .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.lineId.localeCompare(b.lineId, 'ja'))
     };
   }
 }
@@ -158,6 +165,15 @@ export async function getProjectDetail(projectId: string): Promise<ProjectDetail
 export async function persistImportedBundle(input: PersistImportInput): Promise<PersistImportResult> {
   const importedCustomerIds = Array.from(new Set(input.projects.map((project) => project.customerId))).filter(
     Boolean
+  );
+  const replaceCompanyNames = Array.from(
+    new Set((input.replaceCompanyNames || input.projects.map((project) => project.companyName)).filter(Boolean))
+  );
+  const preservedSelections = await loadSelectionsForCustomers(importedCustomerIds);
+  const mergedInvoiceSelections = mergeImportedSelections(
+    input.serviceLines,
+    input.invoiceSelections,
+    preservedSelections
   );
 
   try {
@@ -170,7 +186,9 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
         JSON.stringify(input.warnings)
       ]);
 
-      if (importedCustomerIds.length > 0) {
+      if (replaceCompanyNames.length > 0) {
+        await deleteProjectsByCompanyNames(db, replaceCompanyNames);
+      } else if (importedCustomerIds.length > 0) {
         await deleteProjectsByCustomerIds(db, importedCustomerIds);
       }
 
@@ -180,6 +198,7 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
           input.importId,
           project.customerId,
           project.customerName,
+          project.defaultInvoiceDateMode,
           project.invoiceRecipient,
           project.facilityName,
           project.companyName,
@@ -217,7 +236,7 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
         ]);
       }
 
-      for (const selection of input.invoiceSelections) {
+      for (const selection of mergedInvoiceSelections) {
         await db.query(upsertInvoiceSelectionSql, [
           selection.projectId,
           selection.lineId,
@@ -231,7 +250,7 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
         importId: input.importId,
         projectCount: input.projects.length,
         lineCount: input.serviceLines.length,
-        selectionCount: input.invoiceSelections.length
+        selectionCount: mergedInvoiceSelections.length
       };
     });
   } catch (error) {
@@ -239,10 +258,16 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
     const store = await readLocalStore();
     const projectIdsToReplace = new Set(
       store.projects
-        .filter((project) => importedCustomerIds.includes(project.customerId))
+        .filter(
+          (project) =>
+            replaceCompanyNames.includes(project.companyName) || importedCustomerIds.includes(project.customerId)
+        )
         .map((project) => project.id)
     );
-    let projects = store.projects.filter((project) => !importedCustomerIds.includes(project.customerId));
+    let projects = store.projects.filter(
+      (project) =>
+        !replaceCompanyNames.includes(project.companyName) && !importedCustomerIds.includes(project.customerId)
+    );
     let serviceLines = store.serviceLines.filter((line) => !projectIdsToReplace.has(line.projectId));
     let invoiceSelections = store.invoiceSelections.filter(
       (selection) => !projectIdsToReplace.has(selection.projectId)
@@ -254,17 +279,22 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
     for (const line of input.serviceLines) {
       serviceLines = upsertById(serviceLines, line);
     }
-    for (const selection of input.invoiceSelections) {
+    for (const selection of mergedInvoiceSelections) {
       invoiceSelections = upsertSelection(invoiceSelections, selection);
     }
 
-    await writeLocalStore({ projects, serviceLines, invoiceSelections });
+    await writeLocalStore({
+      ...store,
+      projects,
+      serviceLines,
+      invoiceSelections
+    });
 
     return {
       importId: input.importId,
       projectCount: input.projects.length,
       lineCount: input.serviceLines.length,
-      selectionCount: input.invoiceSelections.length
+      selectionCount: mergedInvoiceSelections.length
     };
   }
 }
@@ -306,6 +336,43 @@ async function deleteProjectsByCustomerIds(
   );
 }
 
+async function deleteProjectsByCompanyNames(
+  db: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+  companyNames: string[]
+) {
+  await db.query(
+    `
+      delete from invoice_selections
+      where project_id in (
+        select id
+        from projects
+        where company_name = any($1::text[])
+      )
+    `,
+    [companyNames]
+  );
+
+  await db.query(
+    `
+      delete from service_lines
+      where project_id in (
+        select id
+        from projects
+        where company_name = any($1::text[])
+      )
+    `,
+    [companyNames]
+  );
+
+  await db.query(
+    `
+      delete from projects
+      where company_name = any($1::text[])
+    `,
+    [companyNames]
+  );
+}
+
 export async function updateProjectHeader(input: UpdateProjectHeaderInput): Promise<Project | null> {
   const now = new Date().toISOString();
 
@@ -314,6 +381,7 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
     const result = await db.query<Project>(updateProjectHeaderSql, [
       input.projectId,
       input.customerName,
+      input.defaultInvoiceDateMode,
       input.invoiceRecipient,
       input.facilityName,
       input.companyName,
@@ -333,6 +401,7 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
     const nextProject: Project = {
       ...project,
       customerName: input.customerName,
+      defaultInvoiceDateMode: input.defaultInvoiceDateMode,
       invoiceRecipient: input.invoiceRecipient,
       facilityName: input.facilityName,
       companyName: input.companyName,
@@ -353,17 +422,33 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
 
 export async function replaceProjectSelections(
   projectId: string,
-  selectedLineIds: string[]
+  selectedLineIds: string[],
+  orderedLineIds?: string[]
 ): Promise<{ projectId: string; selectedCount: number }> {
-  const now = new Date().toISOString();
+  const now = Date.now();
 
   try {
     return await withTransaction(async (db) => {
-      await db.query(resetProjectSelectionsSql, [projectId, now]);
+      const lineResult = await db.query<ServiceLine>(projectServiceLinesSql, [projectId]);
+      const allLineIds = lineResult.rows.map((line) => line.id);
+      const selectedSet = new Set(selectedLineIds);
+      const orderedIds = buildOrderedLineIds(allLineIds, orderedLineIds);
 
-      for (const lineId of selectedLineIds) {
-        await db.query(upsertInvoiceSelectionSql, [projectId, lineId, true, '', now]);
+      await db.query(resetProjectSelectionsSql, [projectId, new Date(now).toISOString()]);
+
+      for (const [index, lineId] of orderedIds.entries()) {
+        const orderedTimestamp = new Date(now + index).toISOString();
+        const line = lineResult.rows.find((item) => item.id === lineId);
+        await db.query(upsertInvoiceSelectionSql, [
+          projectId,
+          lineId,
+          selectedSet.has(lineId),
+          normalizeSelectionBatchKey(line?.serviceDate || null) || '',
+          orderedTimestamp
+        ]);
       }
+
+      await db.query(markProjectDraftSql, [projectId, new Date(now).toISOString()]);
 
       return {
         projectId,
@@ -374,21 +459,28 @@ export async function replaceProjectSelections(
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
     const lines = store.serviceLines.filter((line) => line.projectId === projectId);
+    const orderedIds = buildOrderedLineIds(
+      lines.map((line) => line.id),
+      orderedLineIds
+    );
     let invoiceSelections = store.invoiceSelections.filter((selection) => selection.projectId !== projectId);
 
-    for (const line of lines) {
+    for (const [index, lineId] of orderedIds.entries()) {
+      const line = lines.find((item) => item.id === lineId);
+      if (!line) continue;
       invoiceSelections = upsertSelection(invoiceSelections, {
         projectId,
         lineId: line.id,
         selectedForInvoice: selectedLineIds.includes(line.id),
         selectionBatchKey: normalizeSelectionBatchKey(line.serviceDate) || '',
-        updatedAt: now
+        updatedAt: new Date(now + index).toISOString()
       });
     }
 
     await writeLocalStore({
       ...store,
-      invoiceSelections
+      invoiceSelections,
+      projects: markProjectDraftInStore(store.projects, projectId, new Date(now).toISOString())
     });
 
     return { projectId, selectedCount: selectedLineIds.length };
@@ -429,6 +521,10 @@ export async function updateServiceLine(input: UpdateServiceLineInput): Promise<
       now
     ]);
 
+    if (result.rows[0]) {
+      await db.query(markProjectDraftSql, [input.projectId, now]);
+    }
+
     return result.rows[0] || null;
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
@@ -459,7 +555,8 @@ export async function updateServiceLine(input: UpdateServiceLineInput): Promise<
 
     await writeLocalStore({
       ...store,
-      serviceLines: upsertById(store.serviceLines, nextLine)
+      serviceLines: upsertById(store.serviceLines, nextLine),
+      projects: markProjectDraftInStore(store.projects, input.projectId, now)
     });
 
     return nextLine;
@@ -474,7 +571,8 @@ export async function getProjectExportBundle(projectId: string): Promise<Project
 
   return {
     project: detail.project,
-    serviceLines: detail.serviceLines
+    serviceLines: detail.serviceLines,
+    invoiceSelections: detail.invoiceSelections
   };
 }
 
@@ -545,6 +643,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       id,
       input.customerId,
       input.customerName,
+      input.defaultInvoiceDateMode,
       input.invoiceRecipient,
       input.facilityName,
       input.companyName,
@@ -563,6 +662,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       importId: null,
       customerId: input.customerId,
       customerName: input.customerName,
+      defaultInvoiceDateMode: input.defaultInvoiceDateMode,
       invoiceRecipient: input.invoiceRecipient,
       facilityName: input.facilityName,
       companyName: input.companyName,
@@ -615,6 +715,10 @@ export async function createServiceLine(input: CreateServiceLineInput): Promise<
       now
     ]);
 
+    if (result.rows[0]) {
+      await db.query(markProjectDraftSql, [input.projectId, now]);
+    }
+
     return result.rows[0];
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
@@ -644,6 +748,7 @@ export async function createServiceLine(input: CreateServiceLineInput): Promise<
     const store = await readLocalStore();
     await writeLocalStore({
       ...store,
+      projects: markProjectDraftInStore(store.projects, input.projectId, now),
       serviceLines: upsertById(store.serviceLines, line),
       invoiceSelections: upsertSelection(store.invoiceSelections, {
         projectId: input.projectId,
@@ -682,14 +787,18 @@ export async function duplicateServiceLine(input: DuplicateServiceLineInput): Pr
 }
 
 export async function deleteServiceLine(projectId: string, lineId: string): Promise<void> {
+  const now = new Date().toISOString();
+
   try {
     const db = await getDb();
     await db.query(deleteServiceLineSql, [lineId, projectId]);
+    await db.query(markProjectDraftSql, [projectId, now]);
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
     await writeLocalStore({
-      projects: store.projects,
+      ...store,
+      projects: markProjectDraftInStore(store.projects, projectId, now),
       serviceLines: store.serviceLines.filter(
         (line) => !(line.id === lineId && line.projectId === projectId)
       ),
@@ -709,4 +818,95 @@ function shouldUseLocalStore(error: unknown): boolean {
     message.includes('ECONNREFUSED') ||
     message.includes('getaddrinfo')
   );
+}
+
+async function loadSelectionsForCustomers(customerIds: string[]): Promise<InvoiceSelection[]> {
+  if (customerIds.length === 0) return [];
+
+  try {
+    const db = await getDb();
+    const result = await db.query<InvoiceSelection>(
+      `
+        select
+          sel.project_id as "projectId",
+          sel.line_id as "lineId",
+          sel.selected_for_invoice as "selectedForInvoice",
+          sel.selection_batch_key as "selectionBatchKey",
+          sel.updated_at as "updatedAt"
+        from invoice_selections sel
+        inner join projects p on p.id = sel.project_id
+        where p.customer_id = any($1::text[])
+      `,
+      [customerIds]
+    );
+    return result.rows;
+  } catch (error) {
+    if (!shouldUseLocalStore(error)) throw error;
+    const store = await readLocalStore();
+    const projectIds = new Set(
+      store.projects
+        .filter((project) => customerIds.includes(project.customerId))
+        .map((project) => project.id)
+    );
+    return store.invoiceSelections.filter((selection) => projectIds.has(selection.projectId));
+  }
+}
+
+function mergeImportedSelections(
+  serviceLines: ServiceLine[],
+  importedSelections: InvoiceSelection[],
+  preservedSelections: InvoiceSelection[]
+): InvoiceSelection[] {
+  const linesById = new Map(serviceLines.map((line) => [line.id, line]));
+  const preservedByLineId = new Map(preservedSelections.map((selection) => [selection.lineId, selection]));
+
+  return importedSelections.map((selection) => {
+    const preserved = preservedByLineId.get(selection.lineId);
+    const line = linesById.get(selection.lineId);
+
+    if (!preserved || !line) {
+      return selection;
+    }
+
+    return {
+      ...selection,
+      selectedForInvoice:
+        line.collectionStatus === 'uncollected' ? preserved.selectedForInvoice : false,
+      selectionBatchKey:
+        normalizeSelectionBatchKey(line.serviceDate) ||
+        preserved.selectionBatchKey ||
+        selection.selectionBatchKey,
+      updatedAt: preserved.updatedAt
+    };
+  });
+}
+
+function markProjectDraftInStore(projects: Project[], projectId: string, updatedAt: string): Project[] {
+  const project = projects.find((item) => item.id === projectId);
+  if (!project) return projects;
+
+  return upsertById(projects, {
+    ...project,
+    status: 'draft',
+    updatedAt
+  });
+}
+
+function buildOrderedLineIds(allLineIds: string[], preferredOrderIds?: string[]): string[] {
+  const seen = new Set<string>();
+  const orderedIds: string[] = [];
+
+  for (const lineId of preferredOrderIds || []) {
+    if (!lineId || seen.has(lineId) || !allLineIds.includes(lineId)) continue;
+    seen.add(lineId);
+    orderedIds.push(lineId);
+  }
+
+  for (const lineId of allLineIds) {
+    if (seen.has(lineId)) continue;
+    seen.add(lineId);
+    orderedIds.push(lineId);
+  }
+
+  return orderedIds;
 }

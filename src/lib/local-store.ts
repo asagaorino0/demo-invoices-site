@@ -1,9 +1,11 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { InvoiceSelection, Project, ProjectSummary, ServiceLine } from '../types';
+import type { GoogleSheetSetting, InvoiceSelection, Project, ProjectSummary, ServiceLine } from '../types';
 import { getMonthKey } from './csv/shared';
+import { normalizeCompanyName } from './project-fields';
 
 export interface LocalStoreData {
+  googleSheetSettings: GoogleSheetSetting[];
   projects: Project[];
   serviceLines: ServiceLine[];
   invoiceSelections: InvoiceSelection[];
@@ -16,12 +18,16 @@ export async function readLocalStore(): Promise<LocalStoreData> {
     const raw = await readFile(STORE_FILE, 'utf8');
     const parsed = JSON.parse(raw) as Partial<LocalStoreData>;
     return {
-      projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+      googleSheetSettings: Array.isArray(parsed.googleSheetSettings)
+        ? parsed.googleSheetSettings.map(normalizeGoogleSheetSetting)
+        : [],
+      projects: Array.isArray(parsed.projects) ? parsed.projects.map(normalizeProject) : [],
       serviceLines: Array.isArray(parsed.serviceLines) ? parsed.serviceLines : [],
       invoiceSelections: Array.isArray(parsed.invoiceSelections) ? parsed.invoiceSelections : []
     };
   } catch {
     return {
+      googleSheetSettings: [],
       projects: [],
       serviceLines: [],
       invoiceSelections: []
@@ -47,6 +53,7 @@ export function buildProjectSummaries(data: LocalStoreData): ProjectSummary[] {
         customerId: project.customerId,
         customerName: project.customerName,
         invoiceRecipient: project.invoiceRecipient,
+        companyName: project.companyName,
         uncollectedCount: lines.filter((line) => line.collectionStatus === 'uncollected').length,
         collectedCount: lines.filter((line) => line.collectionStatus === 'collected').length,
         selectedCount: lines.filter((line) => selectedIds.has(line.id)).length,
@@ -55,6 +62,46 @@ export function buildProjectSummaries(data: LocalStoreData): ProjectSummary[] {
       };
     })
     .sort((a, b) => a.customerName.localeCompare(b.customerName, 'ja'));
+}
+
+function normalizeGoogleSheetSetting(value: unknown): GoogleSheetSetting {
+  const entry = value as Partial<GoogleSheetSetting> & { customerId?: string };
+  return {
+    shopKey: String(entry.shopKey || entry.customerId || '').trim(),
+    spreadsheetId: String(entry.spreadsheetId || '').trim(),
+    sheetName: String(entry.sheetName || '').trim(),
+    historySheetName: entry.historySheetName ? String(entry.historySheetName) : null,
+    createdAt: String(entry.createdAt || ''),
+    updatedAt: String(entry.updatedAt || '')
+  };
+}
+
+function normalizeProject(value: unknown): Project {
+  const entry = value as Partial<Project>;
+  return {
+    id: String(entry.id || ''),
+    importId: entry.importId ? String(entry.importId) : null,
+    customerId: String(entry.customerId || ''),
+    customerName: String(entry.customerName || ''),
+    defaultInvoiceDateMode:
+      entry.defaultInvoiceDateMode === 'visit' ||
+      entry.defaultInvoiceDateMode === 'monthEnd' ||
+      entry.defaultInvoiceDateMode === 'custom'
+        ? entry.defaultInvoiceDateMode
+        : 'monthEnd',
+    invoiceRecipient: String(entry.invoiceRecipient || ''),
+    facilityName: String(entry.facilityName || ''),
+    companyName: normalizeCompanyName({
+      companyName: entry.companyName,
+      invoiceRecipient: entry.invoiceRecipient
+    }),
+    issueDate: entry.issueDate ? String(entry.issueDate) : null,
+    defaultRemarks: String(entry.defaultRemarks || ''),
+    status:
+      entry.status === 'ready_for_export' || entry.status === 'exported' ? entry.status : 'draft',
+    createdAt: String(entry.createdAt || ''),
+    updatedAt: String(entry.updatedAt || '')
+  };
 }
 
 export function upsertById<T extends { id: string }>(items: T[], nextItem: T): T[] {

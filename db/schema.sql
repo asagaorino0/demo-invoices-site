@@ -12,6 +12,8 @@ create table if not exists projects (
   import_id uuid references imports(id) on delete set null,
   customer_id text not null,
   customer_name text not null,
+  default_invoice_date_mode text not null default 'monthEnd'
+    check (default_invoice_date_mode in ('visit', 'monthEnd', 'custom')),
   invoice_recipient text not null,
   facility_name text not null default '',
   company_name text not null default '',
@@ -66,6 +68,18 @@ create table if not exists invoice_selections (
 
 create index if not exists idx_invoice_selections_project_id on invoice_selections(project_id);
 create index if not exists idx_invoice_selections_batch_key on invoice_selections(selection_batch_key);
+
+create table if not exists google_sheet_settings (
+  customer_id text primary key,
+  spreadsheet_id text not null,
+  sheet_name text not null,
+  history_sheet_name text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_google_sheet_settings_updated_at
+  on google_sheet_settings(updated_at desc);
 
 create table if not exists export_jobs (
   id uuid primary key,

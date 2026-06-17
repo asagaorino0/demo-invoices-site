@@ -3,6 +3,7 @@ import type { ExtraCharge, InvoiceCsvRow } from '../../types';
 const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   userid: 'userId',
   username: 'userName',
+  defaultinvoicedatemode: 'defaultInvoiceDateMode',
   invoicerecipient: 'invoiceRecipient',
   facilityname: 'facilityName',
   companyname: 'companyName',
@@ -26,7 +27,9 @@ const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   receiptissuedate: 'receiptIssueDate',
   remarks: 'remarks',
   memo: 'memo',
-  visible: 'visible'
+  visible: 'visible',
+  請求日タイプ: 'defaultInvoiceDateMode',
+  表示: 'visible'
 };
 
 export function normalizeHeader(value: string): string {

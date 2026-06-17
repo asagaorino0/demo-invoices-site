@@ -17,13 +17,19 @@
 
 html,
 body {
-  margin: 0;
-  min-height: 100%;
-  background:
+  /* margin: 0; */
+  /* min-height: 100%; */
+  /* background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.88), transparent 28%),
-    linear-gradient(180deg, #e9d7e0 0%, #f4e7ee 50%, #f9f1f5 100%);
+    linear-gradient(180deg, #e9d7e0 0%, #f4e7ee 50%, #f9f1f5 100%); */
+  /* color: var(--ink); */
   color: var(--ink);
-  font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.7), transparent 34%),
+    linear-gradient(180deg, #e9d7e0 0%, #f4e7ee 50%, #f9f1f5 100%);
+  line-height: 1.6;
+  padding: 24px 12px;
+  font-family: 'Noto Sans JP', sans-serif;
 }
 
 a {
@@ -89,20 +95,29 @@ a {
   border: 0;
   text-decoration: none;
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .button-link.primary {
   background: linear-gradient(180deg, #aa166b, #8f0e59);
   color: white;
-  box-shadow: 0 14px 28px rgba(150, 21, 95, 0.18);
 }
 
 .button-link.secondary {
   border: 1px solid rgba(150, 21, 95, 0.18);
   background: linear-gradient(180deg, #ffffff, #fff8fb);
   color: var(--accent-strong);
+}
+
+.button-link.done {
+  border: 1px solid rgba(150, 21, 95, 0.18);
+  background: linear-gradient(180deg, #ffffff, #fff8fb);
+  color: var(--accent-strong);
+}
+
+.button-link:disabled {
+  cursor: default;
 }
 
 .grid {
@@ -282,6 +297,7 @@ a {
 }
 
 .service-line-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
@@ -292,6 +308,44 @@ a {
   background: linear-gradient(180deg, #ffffff, #fff9fc);
 }
 
+.service-line-card.draggable-selected {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.service-line-card.draggable-selected:active,
+.service-line-card.dragging {
+  cursor: grabbing;
+}
+
+.service-line-card.dragging {
+  opacity: 0.68;
+  border-color: #d88aac;
+  box-shadow: 0 12px 30px rgba(181, 98, 138, 0.16);
+  pointer-events: none;
+}
+
+.service-line-card.drop-before::before,
+.service-line-card.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d61f68, #b5628a);
+  box-shadow: 0 6px 18px rgba(214, 31, 104, 0.22);
+}
+
+.service-line-card.drop-before::before {
+  top: -2px;
+}
+
+.service-line-card.drop-after::after {
+  bottom: -2px;
+}
+
 .service-line-side {
   display: grid;
   gap: 14px;
@@ -299,16 +353,22 @@ a {
 }
 
 .service-line-action {
-  min-width: 198px;
-  padding: 18px 26px;
-  border: 0;
-  border-radius: 22px;
-  background: linear-gradient(180deg, #aa166b, #8f0e59);
-  color: white;
+  min-width: 156px;
+  padding: 12px 18px;
+  border: 1px solid rgba(150, 21, 95, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--accent-strong);
   font: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  box-shadow: 0 18px 32px rgba(150, 21, 95, 0.24);
+  font-size: 15px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.service-line-action.is-invoiced {
+  border-color: rgba(189, 45, 74, 0.32);
+  background: rgba(191, 52, 80, 0.1);
+  color: #9f1436;
 }
 
 .invoice-doc-wrap {

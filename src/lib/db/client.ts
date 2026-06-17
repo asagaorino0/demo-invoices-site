@@ -47,10 +47,19 @@ async function createClient(): Promise<DatabaseClient> {
     });
 
     await client.connect();
+    await ensureSchemaCompatibility(client as DatabaseClient);
     return client as DatabaseClient;
   } catch (error) {
     throw new Error(
       `PostgreSQL client is not ready. Install 'pg' and verify DATABASE_URL. Original error: ${String(error)}`
     );
   }
+}
+
+async function ensureSchemaCompatibility(db: DatabaseClient): Promise<void> {
+  await db.query(`
+    alter table projects
+    add column if not exists default_invoice_date_mode text not null default 'monthEnd'
+      check (default_invoice_date_mode in ('visit', 'monthEnd', 'custom'))
+  `);
 }

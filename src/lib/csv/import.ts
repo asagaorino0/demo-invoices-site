@@ -15,6 +15,8 @@ import {
   parseNumber,
   stableId
 } from './shared';
+import { isProjectPlaceholderRow } from './project-placeholder';
+import { normalizeCompanyName } from '../project-fields';
 
 type RawRow = Partial<Record<keyof InvoiceCsvRow, unknown>>;
 
@@ -22,6 +24,7 @@ interface NormalizedRow {
   rowNumber: number;
   customerId: string;
   customerName: string;
+  defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
   invoiceRecipient: string;
   facilityName: string;
   companyName: string;
@@ -66,6 +69,9 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2;
+    if (isProjectPlaceholderRow(row)) {
+      return;
+    }
     const customerId = readString(row.userId);
     const reservationId = readString(row.reservationId);
     const visible = parseBoolean(row.visible, true);
@@ -91,9 +97,13 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
       rowNumber,
       customerId,
       customerName: readString(row.userName),
+      defaultInvoiceDateMode: readInvoiceDateMode(row.defaultInvoiceDateMode),
       invoiceRecipient: readString(row.invoiceRecipient),
       facilityName: readString(row.facilityName),
-      companyName: readString(row.companyName),
+      companyName: normalizeCompanyName({
+        companyName: readString(row.companyName),
+        invoiceRecipient: readString(row.invoiceRecipient)
+      }),
       reservationId,
       serviceDate: readDate(row.date),
       serviceName: readString(row.service),
@@ -127,6 +137,7 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
         importId: null,
         customerId: row.customerId,
         customerName: row.customerName || row.invoiceRecipient || row.customerId,
+        defaultInvoiceDateMode: row.defaultInvoiceDateMode,
         invoiceRecipient: row.invoiceRecipient || row.customerName || row.customerId,
         facilityName: row.facilityName,
         companyName: row.companyName,
@@ -140,6 +151,9 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
       const project = projectMap.get(projectId)!;
       if (!project.defaultRemarks && row.remarks) {
         project.defaultRemarks = row.remarks;
+      }
+      if (!project.defaultInvoiceDateMode && row.defaultInvoiceDateMode) {
+        project.defaultInvoiceDateMode = row.defaultInvoiceDateMode;
       }
       if (!project.issueDate && row.issueDate) {
         project.issueDate = row.issueDate;
@@ -234,6 +248,14 @@ function readString(value: unknown): string {
 function readDate(value: unknown): string | null {
   const text = readString(value);
   return text || null;
+}
+
+function readInvoiceDateMode(value: unknown): Project['defaultInvoiceDateMode'] {
+  const text = readString(value);
+  if (text === 'visit' || text === 'monthEnd' || text === 'custom') {
+    return text;
+  }
+  return 'monthEnd';
 }
 
 function parseCsv(text: string): string[][] {
