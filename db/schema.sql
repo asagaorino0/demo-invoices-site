@@ -12,6 +12,7 @@ create table if not exists projects (
   import_id uuid references imports(id) on delete set null,
   customer_id text not null,
   customer_name text not null,
+  subject text not null default '',
   default_invoice_date_mode text not null default 'monthEnd'
     check (default_invoice_date_mode in ('visit', 'monthEnd', 'custom')),
   invoice_recipient text not null,

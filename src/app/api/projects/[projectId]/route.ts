@@ -40,6 +40,7 @@ export async function PATCH(
     const { projectId } = await context.params;
     const body = (await request.json()) as {
       customerName?: string;
+      subject?: string;
       defaultInvoiceDateMode?: Project['defaultInvoiceDateMode'];
       invoiceRecipient?: string;
       facilityName?: string;
@@ -52,6 +53,7 @@ export async function PATCH(
     const project = await updateProjectHeader({
       projectId,
       customerName: String(body.customerName || '').trim(),
+      subject: String(body.subject || '').trim(),
       defaultInvoiceDateMode: body.defaultInvoiceDateMode || 'monthEnd',
       invoiceRecipient: String(body.invoiceRecipient || '').trim(),
       facilityName: String(body.facilityName || '').trim(),

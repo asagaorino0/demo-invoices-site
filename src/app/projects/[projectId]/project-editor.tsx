@@ -155,6 +155,7 @@ export function ProjectEditor({
   );
   const [form, setForm] = useState({
     customerName: project.customerName,
+    subject: project.subject,
     defaultInvoiceDateMode: project.defaultInvoiceDateMode,
     invoiceRecipient: project.invoiceRecipient,
     facilityName: project.facilityName,
@@ -165,6 +166,7 @@ export function ProjectEditor({
   });
   const [savedHeader, setSavedHeader] = useState({
     customerName: project.customerName,
+    subject: project.subject,
     defaultInvoiceDateMode: project.defaultInvoiceDateMode,
     invoiceRecipient: project.invoiceRecipient,
     facilityName: project.facilityName,
@@ -218,6 +220,7 @@ export function ProjectEditor({
   );
   const isHeaderDirty =
     form.customerName !== savedHeader.customerName ||
+    form.subject !== savedHeader.subject ||
     form.defaultInvoiceDateMode !== savedHeader.defaultInvoiceDateMode ||
     form.invoiceRecipient !== savedHeader.invoiceRecipient ||
     form.facilityName !== savedHeader.facilityName ||
@@ -306,6 +309,7 @@ export function ProjectEditor({
     () => ({
       ...project,
       customerName: form.customerName,
+      subject: form.subject,
       defaultInvoiceDateMode: form.defaultInvoiceDateMode,
       invoiceRecipient: form.invoiceRecipient,
       facilityName: form.facilityName,
@@ -383,6 +387,7 @@ export function ProjectEditor({
   useEffect(() => {
     const nextHeader = {
       customerName: project.customerName,
+      subject: project.subject,
       defaultInvoiceDateMode: project.defaultInvoiceDateMode,
       invoiceRecipient: project.invoiceRecipient,
       facilityName: project.facilityName,
@@ -534,6 +539,7 @@ export function ProjectEditor({
     }
     setSavedHeader({
       customerName: form.customerName,
+      subject: form.subject,
       defaultInvoiceDateMode: form.defaultInvoiceDateMode,
       invoiceRecipient: form.invoiceRecipient,
       facilityName: form.facilityName,
@@ -1597,8 +1603,16 @@ export function ProjectEditor({
               </label>
             ) : (
               <>
-                <label>
-                  <div>請求日タイプ</div>
+            <label>
+              <div>件名</div>
+              <input
+                value={form.subject}
+                onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
+                style={inputStyle}
+              />
+            </label>
+            <label>
+              <div>請求日タイプ</div>
                   <select
                     value={form.defaultInvoiceDateMode}
                     onChange={(event) =>

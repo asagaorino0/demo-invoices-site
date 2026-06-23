@@ -10,6 +10,7 @@ export function CreateProjectPanel() {
   const [form, setForm] = useState<{
     customerId: string;
     customerName: string;
+    subject: string;
     defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
     invoiceRecipient: string;
     facilityName: string;
@@ -18,6 +19,7 @@ export function CreateProjectPanel() {
   }>({
     customerId: '',
     customerName: '',
+    subject: '',
     defaultInvoiceDateMode: 'monthEnd',
     invoiceRecipient: '',
     facilityName: '',
@@ -71,6 +73,7 @@ export function CreateProjectPanel() {
       <div style={{ display: 'grid', gap: 12 }}>
         <input placeholder="顧客ID" value={form.customerId} onChange={(e) => setForm((c) => ({ ...c, customerId: e.target.value }))} />
         <input placeholder="利用者名" value={form.customerName} onChange={(e) => setForm((c) => ({ ...c, customerName: e.target.value }))} />
+        <input placeholder="件名" value={form.subject} onChange={(e) => setForm((c) => ({ ...c, subject: e.target.value }))} />
         <select
           value={form.defaultInvoiceDateMode}
           onChange={(e) =>

@@ -7,6 +7,7 @@ import {
   formatPlainCurrency,
   getDocumentNumber,
   getInvoiceIssueDate,
+  getProjectSubject,
   getReceiptIssueDate
 } from '../../lib/invoice/preview';
 
@@ -53,7 +54,7 @@ export function InvoicePreview({ config, project, lines, kind }: InvoicePreviewP
         <div className="invoice-doc-header">
           <div>
             <div className="invoice-doc-recipient">{project.invoiceRecipient}</div>
-            <div className="invoice-doc-copy">件名：介護美容施術料</div>
+            <div className="invoice-doc-copy">件名：{getProjectSubject(project)}</div>
             <div className="invoice-doc-copy">{message}</div>
             <div className="invoice-doc-amount">
               <span>{amountLabel}</span>
