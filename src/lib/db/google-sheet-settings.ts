@@ -3,7 +3,7 @@ import { readLocalStore, writeLocalStore } from '../local-store';
 import { getDb, type DatabaseClient } from './client';
 
 export interface UpsertGoogleSheetSettingInput {
-  shopKey: string;
+  settingKey: string;
   spreadsheetId: string;
   sheetName: string;
   historySheetName: string | null;
@@ -11,14 +11,14 @@ export interface UpsertGoogleSheetSettingInput {
 
 let ensureTablePromise: Promise<void> | null = null;
 
-export async function getGoogleSheetSetting(shopKey: string): Promise<GoogleSheetSetting | null> {
+export async function getGoogleSheetSetting(settingKey: string): Promise<GoogleSheetSetting | null> {
   try {
     const db = await getDb();
     await ensureGoogleSheetSettingsTable(db);
     const result = await db.query<GoogleSheetSetting>(
       `
         select
-          customer_id as "shopKey",
+          customer_id as "settingKey",
           spreadsheet_id as "spreadsheetId",
           sheet_name as "sheetName",
           history_sheet_name as "historySheetName",
@@ -27,13 +27,13 @@ export async function getGoogleSheetSetting(shopKey: string): Promise<GoogleShee
         from google_sheet_settings
         where customer_id = $1
       `,
-      [shopKey]
+      [settingKey]
     );
     return result.rows[0] || null;
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
-    return store.googleSheetSettings.find((item) => item.shopKey === shopKey) || null;
+    return store.googleSheetSettings.find((item) => item.settingKey === settingKey) || null;
   }
 }
 
@@ -44,7 +44,7 @@ export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
     const result = await db.query<GoogleSheetSetting>(
       `
         select
-          customer_id as "shopKey",
+          customer_id as "settingKey",
           spreadsheet_id as "spreadsheetId",
           sheet_name as "sheetName",
           history_sheet_name as "historySheetName",
@@ -59,7 +59,7 @@ export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
     return [...store.googleSheetSettings].sort(
-      (a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.shopKey.localeCompare(b.shopKey, 'ja')
+      (a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.settingKey.localeCompare(b.settingKey, 'ja')
     );
   }
 }
@@ -84,33 +84,33 @@ export async function upsertGoogleSheetSetting(
           history_sheet_name = excluded.history_sheet_name,
           updated_at = now()
         returning
-          customer_id as "shopKey",
+          customer_id as "settingKey",
           spreadsheet_id as "spreadsheetId",
           sheet_name as "sheetName",
           history_sheet_name as "historySheetName",
           created_at as "createdAt",
           updated_at as "updatedAt"
       `,
-      [input.shopKey, input.spreadsheetId, input.sheetName, input.historySheetName]
+      [input.settingKey, input.spreadsheetId, input.sheetName, input.historySheetName]
     );
     return result.rows[0];
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
     const now = new Date().toISOString();
-    const existing = store.googleSheetSettings.find((item) => item.shopKey === input.shopKey);
+    const existing = store.googleSheetSettings.find((item) => item.settingKey === input.settingKey);
     const nextSetting: GoogleSheetSetting = {
-      shopKey: input.shopKey,
+      settingKey: input.settingKey,
       spreadsheetId: input.spreadsheetId,
       sheetName: input.sheetName,
       historySheetName: input.historySheetName,
       createdAt: existing?.createdAt || now,
       updatedAt: now
     };
-    const nextSettings = store.googleSheetSettings.filter((item) => item.shopKey !== input.shopKey);
+    const nextSettings = store.googleSheetSettings.filter((item) => item.settingKey !== input.settingKey);
     await writeLocalStore({
       ...store,
-      googleSheetSettings: [...nextSettings, nextSetting].sort((a, b) => a.shopKey.localeCompare(b.shopKey, 'ja'))
+      googleSheetSettings: [...nextSettings, nextSetting].sort((a, b) => a.settingKey.localeCompare(b.settingKey, 'ja'))
     });
     return nextSetting;
   }

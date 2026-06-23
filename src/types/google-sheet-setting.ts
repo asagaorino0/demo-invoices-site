@@ -1,5 +1,7 @@
+export const DEFAULT_GOOGLE_SHEET_SETTING_KEY = 'default-source-sheet';
+
 export interface GoogleSheetSetting {
-  shopKey: string;
+  settingKey: string;
   spreadsheetId: string;
   sheetName: string;
   historySheetName: string | null;

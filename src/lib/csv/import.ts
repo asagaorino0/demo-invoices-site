@@ -24,6 +24,7 @@ interface NormalizedRow {
   rowNumber: number;
   customerId: string;
   customerName: string;
+  subject: string;
   defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
   invoiceRecipient: string;
   facilityName: string;
@@ -97,6 +98,7 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
       rowNumber,
       customerId,
       customerName: readString(row.userName),
+      subject: readString(row.subject),
       defaultInvoiceDateMode: readInvoiceDateMode(row.defaultInvoiceDateMode),
       invoiceRecipient: readString(row.invoiceRecipient),
       facilityName: readString(row.facilityName),
@@ -137,6 +139,7 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
         importId: null,
         customerId: row.customerId,
         customerName: row.customerName || row.invoiceRecipient || row.customerId,
+        subject: row.subject,
         defaultInvoiceDateMode: row.defaultInvoiceDateMode,
         invoiceRecipient: row.invoiceRecipient || row.customerName || row.customerId,
         facilityName: row.facilityName,
@@ -151,6 +154,9 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
       const project = projectMap.get(projectId)!;
       if (!project.defaultRemarks && row.remarks) {
         project.defaultRemarks = row.remarks;
+      }
+      if (!project.subject && row.subject) {
+        project.subject = row.subject;
       }
       if (!project.defaultInvoiceDateMode && row.defaultInvoiceDateMode) {
         project.defaultInvoiceDateMode = row.defaultInvoiceDateMode;

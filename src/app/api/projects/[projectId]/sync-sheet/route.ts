@@ -1,6 +1,7 @@
 import { getProjectExportBundle, markProjectAsExported } from '../../../../../lib/store/projects';
 import { getGoogleSheetsErrorStatus, syncProjectToGoogleSheet } from '../../../../../lib/google-sheets';
 import { getGoogleSheetSetting } from '../../../../../lib/store/google-sheet-settings';
+import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../../../types';
 
 export async function POST(
   _request: Request,
@@ -20,12 +21,12 @@ export async function POST(
       );
     }
 
-    const setting = await getGoogleSheetSetting(bundle.project.companyName);
+    const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY);
     if (!setting) {
       return Response.json(
         {
           error: 'google_sheet_setting_not_found',
-          message: 'このショップの source スプレッドシート設定が未登録です。先にスプレッドシート設定を保存してください。'
+          message: 'source スプレッドシート設定が未登録です。先にスプレッドシート設定を保存してください。'
         },
         { status: 404 }
       );

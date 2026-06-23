@@ -10,6 +10,7 @@ export function buildProjectPlaceholderRow(project: Project): InvoiceCsvRow {
   return {
     userId: project.customerId,
     userName: project.customerName,
+    subject: project.subject,
     defaultInvoiceDateMode: project.defaultInvoiceDateMode,
     invoiceRecipient: project.invoiceRecipient,
     facilityName: project.facilityName,

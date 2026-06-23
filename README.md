@@ -57,7 +57,13 @@ GOOGLE_SERVICE_ACCOUNT_EMAIL=service-account@your-project.iam.gserviceaccount.co
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
-スプレッドシートの URL / ID、シート名、履歴シート名は `.env.local` ではなく `/projects` 画面から利用者ごとに保存します。
+スプレッドシートの URL / ID、シート名、履歴シート名は `.env.local` ではなく `/projects` 画面から保存します。
+
+重要:
+
+- source スプレッドシートは `/projects` 画面全体で 1 つです
+- 利用者ごと、会社名ごと、ショップごとに source スプレッドシートが切り替わる挙動ではありません
+- 左上の `Source スプレッドシート` カードで設定した内容が、この画面の取込元と保存先になります
 
 PostgreSQL を併用する場合だけ、追加で次を設定します。
 
@@ -74,7 +80,7 @@ POSTGRES_SSL_MODE=require
 - デプロイのたびにお客様へ再承認を求める方式ではありません
 - PostgreSQL を使う場合、接続先は Azure 固定ではありません
 - DB 名は `konoyubi_invoices` のような `snake_case` を推奨します
-- 履歴シート名は `/projects` の設定画面で利用者ごとに指定できます。未入力時は `history` を使います
+- 履歴シート名は `/projects` の `Source スプレッドシート` 設定で指定できます。未入力時は `history` を使います
 
 Google Sheets 連携の初回セットアップ手順:
 
@@ -86,7 +92,7 @@ Google Sheets 連携の初回セットアップ手順:
 6. ダウンロードした JSON の `client_email` を `GOOGLE_SERVICE_ACCOUNT_EMAIL` に入れる
 7. 同じ JSON の `private_key` を `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` に入れる
 8. 対象スプレッドシートをサービスアカウントのメールアドレスへ `編集者` として共有する
-9. `/projects` 画面で対象の利用者を選び、Google Sheets カードへスプレッドシート URL または ID を入れる
+9. `/projects` 画面の `Source スプレッドシート` カードで、既存のスプレッドシート URL / ID を入れて保存するか、その場で新規作成する
 10. 同じカードで対象タブ名を入れ、必要なら履歴シート名も入れて保存する
 
 `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` は複数行の鍵ですが、`.env.local` では `\n` を含む 1 行文字列として入れます。
@@ -97,7 +103,8 @@ Google Sheets 連携の初回セットアップ手順:
 - 形式は `invoice-sync@your-project.iam.gserviceaccount.com` のようなサービスアカウントメールです
 - 権限は `編集者` を選びます
 - Google アカウント本人ではなく、サービスアカウントのメールアドレスに共有する必要があります
-- 共有後に `/projects` へ戻り、利用者別スプレッドシートカードで設定保存すると接続確認も兼ねられます
+- 共有後に `/projects` へ戻り、`Source スプレッドシート` カードで設定保存すると接続確認も兼ねられます
+- 画面から新規作成する場合、そのスプレッドシートの所有者はサービスアカウントになります
 
 ### 3. DB schema を流す
 

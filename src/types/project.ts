@@ -32,6 +32,7 @@ export interface Project {
   importId: string | null;
   customerId: string;
   customerName: string;
+  subject: string;
   defaultInvoiceDateMode: ProjectInvoiceDateMode;
   invoiceRecipient: string;
   facilityName: string;

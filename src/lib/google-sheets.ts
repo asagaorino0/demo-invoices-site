@@ -54,6 +54,19 @@ export interface ReadGoogleSheetResult {
   values: string[][];
 }
 
+export interface CreateGoogleSheetTargetInput {
+  title: string;
+  sheetName: string;
+  historySheetName?: string | null;
+}
+
+export interface CreateGoogleSheetTargetResult {
+  spreadsheetId: string;
+  spreadsheetUrl: string;
+  sheetName: string;
+  historySheetName: string;
+}
+
 interface GoogleSheetHistoryRecord {
   savedAt: string;
   action: string;
@@ -83,6 +96,7 @@ const HISTORY_HEADERS = [
 const HISTORY_FIELD_LABELS: Partial<Record<keyof InvoiceCsvRow | 'reservationId', string>> = {
   userId: '顧客ID',
   userName: '利用者名',
+  subject: '件名',
   defaultInvoiceDateMode: '請求日タイプ',
   invoiceRecipient: '請求先',
   facilityName: '施設名',
@@ -235,6 +249,58 @@ export async function verifyGoogleSheetTarget(target: GoogleSheetTarget): Promis
   };
 }
 
+export async function createGoogleSheetTarget(
+  input: CreateGoogleSheetTargetInput
+): Promise<CreateGoogleSheetTargetResult> {
+  const sheetName = String(input.sheetName || '').trim();
+  const historySheetName = String(input.historySheetName || '').trim() || 'history';
+  const title = String(input.title || '').trim();
+
+  if (!title) {
+    throw new Error('新規作成するスプレッドシート名を入力してください。');
+  }
+  if (!sheetName) {
+    throw new Error('シート名を入力してください。');
+  }
+
+  const config = getGoogleSheetsConfig({
+    spreadsheetId: '__new__',
+    sheetName,
+    historySheetName
+  });
+  const accessToken = await fetchGoogleAccessToken(config);
+  const created = await createSpreadsheet({
+    accessToken,
+    title,
+    sheetName,
+    historySheetName,
+    clientEmail: config.clientEmail
+  });
+
+  await updateSheetValues({
+    accessToken,
+    spreadsheetId: created.spreadsheetId,
+    range: `${toSheetRangePrefix(sheetName)}!A1`,
+    values: [Array.from(INVOICE_CSV_HEADERS)],
+    clientEmail: config.clientEmail
+  });
+
+  await updateSheetValues({
+    accessToken,
+    spreadsheetId: created.spreadsheetId,
+    range: `${toSheetRangePrefix(historySheetName)}!A1`,
+    values: [Array.from(HISTORY_HEADERS)],
+    clientEmail: config.clientEmail
+  });
+
+  return {
+    spreadsheetId: created.spreadsheetId,
+    spreadsheetUrl: created.spreadsheetUrl,
+    sheetName,
+    historySheetName
+  };
+}
+
 export function getGoogleSheetsErrorStatus(error: unknown): number | null {
   if (error instanceof GoogleSheetsRequestError) {
     return error.status;
@@ -374,6 +440,63 @@ async function fetchSpreadsheetMetadata(input: {
   return (await response.json()) as { sheets: Array<{ properties?: { title?: string } }> };
 }
 
+async function createSpreadsheet(input: {
+  accessToken: string;
+  title: string;
+  sheetName: string;
+  historySheetName: string;
+  clientEmail?: string;
+}): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+  const response = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${input.accessToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      properties: {
+        title: input.title
+      },
+      sheets: [
+        {
+          properties: {
+            title: input.sheetName
+          }
+        },
+        {
+          properties: {
+            title: input.historySheetName
+          }
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildGoogleSheetsApiError(
+      'Google Sheets の新規作成に失敗しました。',
+      response.status,
+      text,
+      input.clientEmail
+    );
+  }
+
+  const data = (await response.json()) as {
+    spreadsheetId?: string;
+    spreadsheetUrl?: string;
+  };
+
+  if (!data.spreadsheetId || !data.spreadsheetUrl) {
+    throw new Error('Google Sheets の新規作成結果に必要な情報が含まれていませんでした。');
+  }
+
+  return {
+    spreadsheetId: data.spreadsheetId,
+    spreadsheetUrl: data.spreadsheetUrl
+  };
+}
+
 async function readGoogleSheetValuesInternal(
   config: GoogleSheetsConfig,
   accessToken: string
@@ -511,14 +634,21 @@ function buildHeaderLabels(values: string[]): string[] {
   const headerLabels = values.map((value) => String(value || '').trim());
   const headerKeys = headerLabels.map((value) => normalizeHeader(value));
   const missingHeaders = INVOICE_CSV_HEADERS.filter((header) => !headerKeys.includes(header));
+  const optionalHeaders = new Set<keyof InvoiceCsvRow>(['subject']);
+  const requiredMissingHeaders = missingHeaders.filter((header) => !optionalHeaders.has(header));
 
-  if (missingHeaders.length > 0) {
+  if (requiredMissingHeaders.length > 0) {
     throw new Error(
-      `Google Sheets のヘッダがテンプレートと一致しません。不足列: ${missingHeaders.join(', ')}`
+      `Google Sheets のヘッダがテンプレートと一致しません。不足列: ${requiredMissingHeaders.join(', ')}`
     );
   }
 
-  return headerLabels;
+  const appendedHeaderLabels = [...headerLabels];
+  for (const header of missingHeaders) {
+    appendedHeaderLabels.push(header);
+  }
+
+  return appendedHeaderLabels;
 }
 
 function mapCsvRowToSheetRow(row: InvoiceCsvRow, headerKeys: string[]): string[] {

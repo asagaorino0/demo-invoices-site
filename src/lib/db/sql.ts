@@ -3,6 +3,7 @@ export const projectSummarySql = `
     p.id,
     p.customer_id as "customerId",
     p.customer_name as "customerName",
+    p.subject,
     p.default_invoice_date_mode as "defaultInvoiceDateMode",
     p.invoice_recipient as "invoiceRecipient",
     p.company_name as "companyName",
@@ -30,6 +31,7 @@ export const projectDetailSql = `
     p.import_id as "importId",
     p.customer_id as "customerId",
     p.customer_name as "customerName",
+    p.subject,
     p.default_invoice_date_mode as "defaultInvoiceDateMode",
     p.invoice_recipient as "invoiceRecipient",
     p.facility_name as "facilityName",
@@ -99,6 +101,7 @@ export const upsertProjectSql = `
     import_id,
     customer_id,
     customer_name,
+    subject,
     default_invoice_date_mode,
     invoice_recipient,
     facility_name,
@@ -109,12 +112,13 @@ export const upsertProjectSql = `
     created_at,
     updated_at
   ) values (
-    $1, $2, $3, $4, $5, $6, $7, $8, nullif($9, '')::date, $10, $11, $12::timestamptz, $13::timestamptz
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, '')::date, $11, $12, $13::timestamptz, $14::timestamptz
   )
   on conflict (id) do update set
     import_id = excluded.import_id,
     customer_id = excluded.customer_id,
     customer_name = excluded.customer_name,
+    subject = excluded.subject,
     default_invoice_date_mode = excluded.default_invoice_date_mode,
     invoice_recipient = excluded.invoice_recipient,
     facility_name = excluded.facility_name,
@@ -192,20 +196,22 @@ export const updateProjectHeaderSql = `
   update projects
   set
     customer_name = $2,
-    default_invoice_date_mode = $3,
-    invoice_recipient = $4,
-    facility_name = $5,
-    company_name = $6,
-    issue_date = nullif($7, '')::date,
-    default_remarks = $8,
-    status = $9,
-    updated_at = $10::timestamptz
+    subject = $3,
+    default_invoice_date_mode = $4,
+    invoice_recipient = $5,
+    facility_name = $6,
+    company_name = $7,
+    issue_date = nullif($8, '')::date,
+    default_remarks = $9,
+    status = $10,
+    updated_at = $11::timestamptz
   where id = $1
   returning
     id,
     import_id as "importId",
     customer_id as "customerId",
     customer_name as "customerName",
+    subject,
     default_invoice_date_mode as "defaultInvoiceDateMode",
     invoice_recipient as "invoiceRecipient",
     facility_name as "facilityName",
@@ -286,6 +292,7 @@ export const insertProjectSql = `
     import_id,
     customer_id,
     customer_name,
+    subject,
     default_invoice_date_mode,
     invoice_recipient,
     facility_name,
@@ -296,13 +303,14 @@ export const insertProjectSql = `
     created_at,
     updated_at
   ) values (
-    $1, null, $2, $3, $4, $5, $6, $7, nullif($8, '')::date, $9, $10, $11::timestamptz, $12::timestamptz
+    $1, null, $2, $3, $4, $5, $6, $7, $8, nullif($9, '')::date, $10, $11, $12::timestamptz, $13::timestamptz
   )
   returning
     id,
     import_id as "importId",
     customer_id as "customerId",
     customer_name as "customerName",
+    subject,
     default_invoice_date_mode as "defaultInvoiceDateMode",
     invoice_recipient as "invoiceRecipient",
     facility_name as "facilityName",

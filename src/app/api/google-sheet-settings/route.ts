@@ -1,19 +1,16 @@
-import { getGoogleSheetsErrorStatus, verifyGoogleSheetTarget } from '../../../lib/google-sheets';
+import {
+  createGoogleSheetTarget,
+  getGoogleSheetsErrorStatus,
+  verifyGoogleSheetTarget
+} from '../../../lib/google-sheets';
 import { getGoogleSheetSetting, upsertGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
+import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../types';
 
 export async function GET(request: Request): Promise<Response> {
   try {
     const { searchParams } = new URL(request.url);
-    const shopKey = String(searchParams.get('shopKey') || '').trim();
-
-    if (!shopKey) {
-      return Response.json(
-        { error: 'shop_key_required', message: 'shopKey を指定してください。' },
-        { status: 400 }
-      );
-    }
-
-    const setting = await getGoogleSheetSetting(shopKey);
+    const settingKey = String(searchParams.get('settingKey') || '').trim() || DEFAULT_GOOGLE_SHEET_SETTING_KEY;
+    const setting = await getGoogleSheetSetting(settingKey);
     return Response.json({ setting });
   } catch (error) {
     const status = getGoogleSheetsErrorStatus(error) || 500;
@@ -30,29 +27,21 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = (await request.json()) as {
-      shopKey?: string;
+      settingKey?: string;
+      createNew?: boolean;
+      spreadsheetTitle?: string;
       spreadsheetUrlOrId?: string;
       sheetName?: string;
       historySheetName?: string | null;
     };
 
-    const shopKey = String(body.shopKey || '').trim();
-    const spreadsheetId = extractSpreadsheetId(String(body.spreadsheetUrlOrId || '').trim());
+    const settingKey = String(body.settingKey || '').trim() || DEFAULT_GOOGLE_SHEET_SETTING_KEY;
+    const createNew = Boolean(body.createNew);
+    const spreadsheetTitle = String(body.spreadsheetTitle || '').trim();
+    const requestedSpreadsheetId = extractSpreadsheetId(String(body.spreadsheetUrlOrId || '').trim());
     const sheetName = String(body.sheetName || '').trim();
     const historySheetName = String(body.historySheetName || '').trim() || null;
 
-    if (!shopKey) {
-      return Response.json(
-        { error: 'shop_key_required', message: 'ショップ名を指定してください。' },
-        { status: 400 }
-      );
-    }
-    if (!spreadsheetId) {
-      return Response.json(
-        { error: 'spreadsheet_id_required', message: 'スプレッドシートURLまたはIDを入力してください。' },
-        { status: 400 }
-      );
-    }
     if (!sheetName) {
       return Response.json(
         { error: 'sheet_name_required', message: 'シート名を入力してください。' },
@@ -60,13 +49,36 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
+    if (!createNew && !requestedSpreadsheetId) {
+      return Response.json(
+        { error: 'spreadsheet_id_required', message: 'スプレッドシートURLまたはIDを入力してください。' },
+        { status: 400 }
+      );
+    }
+
+    if (createNew && !spreadsheetTitle) {
+      return Response.json(
+        { error: 'spreadsheet_title_required', message: '新規作成するスプレッドシート名を入力してください。' },
+        { status: 400 }
+      );
+    }
+
+    const created = createNew
+      ? await createGoogleSheetTarget({
+        title: spreadsheetTitle,
+        sheetName,
+        historySheetName
+      })
+      : null;
+    const spreadsheetId = created?.spreadsheetId || requestedSpreadsheetId;
+
     const verified = await verifyGoogleSheetTarget({
       spreadsheetId,
       sheetName,
       historySheetName
     });
     const setting = await upsertGoogleSheetSetting({
-      shopKey,
+      settingKey,
       spreadsheetId,
       sheetName,
       historySheetName
@@ -76,7 +88,10 @@ export async function POST(request: Request): Promise<Response> {
       ok: true,
       setting,
       verified,
-      message: 'スプレッドシート設定を保存しました。サービスアカウントでアクセス確認済みです。'
+      created,
+      message: createNew
+        ? 'スプレッドシートを新規作成して設定しました。サービスアカウントでアクセス確認済みです。'
+        : 'スプレッドシート設定を保存しました。サービスアカウントでアクセス確認済みです。'
     });
   } catch (error) {
     const status = getGoogleSheetsErrorStatus(error) || 500;

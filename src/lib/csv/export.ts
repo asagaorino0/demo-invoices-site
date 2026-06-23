@@ -38,6 +38,7 @@ export function exportInvoiceCsvRows(input: InvoiceExportInput): InvoiceCsvRow[]
       return {
         userId: project.customerId,
         userName: project.customerName,
+        subject: project.subject,
         defaultInvoiceDateMode: project.defaultInvoiceDateMode,
         invoiceRecipient: project.invoiceRecipient,
         facilityName: project.facilityName,
@@ -72,6 +73,7 @@ export function exportInvoiceCsvText(input: InvoiceExportInput): string {
   const headers = [
     'userId',
     'userName',
+    'subject',
     'defaultInvoiceDateMode',
     'invoiceRecipient',
     'facilityName',

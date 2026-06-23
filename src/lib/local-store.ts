@@ -66,8 +66,10 @@ export function buildProjectSummaries(data: LocalStoreData): ProjectSummary[] {
 
 function normalizeGoogleSheetSetting(value: unknown): GoogleSheetSetting {
   const entry = value as Partial<GoogleSheetSetting> & { customerId?: string };
+  const legacyEntry = value as Record<string, unknown>;
+  const legacySettingKey = legacyEntry['shop' + 'Key'];
   return {
-    shopKey: String(entry.shopKey || entry.customerId || '').trim(),
+    settingKey: String(entry.settingKey || legacySettingKey || entry.customerId || '').trim(),
     spreadsheetId: String(entry.spreadsheetId || '').trim(),
     sheetName: String(entry.sheetName || '').trim(),
     historySheetName: entry.historySheetName ? String(entry.historySheetName) : null,
@@ -90,6 +92,7 @@ function normalizeProject(value: unknown): Project {
         ? entry.defaultInvoiceDateMode
         : 'monthEnd',
     invoiceRecipient: String(entry.invoiceRecipient || ''),
+    subject: String(entry.subject || ''),
     facilityName: String(entry.facilityName || ''),
     companyName: normalizeCompanyName({
       companyName: entry.companyName,

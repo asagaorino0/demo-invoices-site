@@ -3,7 +3,7 @@ import { normalizeCompanyName } from '../../../lib/project-fields';
 import { validateProjectInput } from '../../../lib/validation';
 import { getGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
 import { getGoogleSheetsErrorStatus, syncProjectToGoogleSheet } from '../../../lib/google-sheets';
-import type { Project } from '../../../types';
+import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type Project } from '../../../types';
 
 export async function GET(): Promise<Response> {
   try {
@@ -29,6 +29,7 @@ export async function POST(request: Request): Promise<Response> {
     const body = (await request.json()) as {
       customerId?: string;
       customerName?: string;
+      subject?: string;
       defaultInvoiceDateMode?: Project['defaultInvoiceDateMode'];
       invoiceRecipient?: string;
       facilityName?: string;
@@ -40,6 +41,7 @@ export async function POST(request: Request): Promise<Response> {
     const input = {
       customerId: String(body.customerId || '').trim(),
       customerName: String(body.customerName || '').trim(),
+      subject: String(body.subject || '').trim(),
       defaultInvoiceDateMode: body.defaultInvoiceDateMode || 'monthEnd',
       invoiceRecipient: String(body.invoiceRecipient || '').trim(),
       facilityName: String(body.facilityName || '').trim(),
@@ -68,9 +70,7 @@ export async function POST(request: Request): Promise<Response> {
       message?: string;
     } | null = null;
 
-    const setting = input.companyName
-      ? await getGoogleSheetSetting(input.companyName).catch(() => null)
-      : null;
+    const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
 
     if (setting) {
       try {

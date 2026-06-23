@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { listProjectSummaries, getProjectDetail } from '../../lib/store/projects';
-import { getProjectStatusLabel, type ProjectSummary } from '../../types';
+import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, getProjectStatusLabel, type ProjectSummary } from '../../types';
 import { ImportPanel } from './import-panel';
 import { CreateProjectPanel } from './create-project-panel';
 import { ProjectEditor } from './[projectId]/project-editor';
 import { loadSiteConfig } from '../../lib/site-config';
-import { getGoogleSheetSetting, listGoogleSheetSettings } from '../../lib/store/google-sheet-settings';
+import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,15 +36,10 @@ export default async function ProjectsPage({
       invoiceSelections: []
     }))
     : null;
-  const selectedContextCompanyName =
-    selectedContextGroup?.companyName || selectedContextBundle?.project?.companyName || '';
-  const googleSheetSettings = await listGoogleSheetSettings().catch(() => []);
-  const selectedGoogleSheetSetting = selectedContextCompanyName
-    ? await getGoogleSheetSetting(selectedContextCompanyName).catch(() => null)
-    : null;
+  const selectedGoogleSheetSetting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
   const hasSourceSpreadsheetSetting = Boolean(selectedGoogleSheetSetting);
   const visibleProjects = hasSourceSpreadsheetSetting
-    ? filterProjectsByConfiguredShops(projects, googleSheetSettings)
+    ? filterProjectsBySelectedSheet(projects, selectedGoogleSheetSetting?.updatedAt || '')
     : [];
   const customerGroups = buildCustomerGroups(visibleProjects);
   const requestedProjectId = resolvedSearchParams?.projectId || '';
@@ -56,7 +51,11 @@ export default async function ProjectsPage({
         : customerGroups[0]?.project.id || visibleProjects[0]?.id || ''
       : '';
   const manualProjectCanOpen = Boolean(!hasSourceSpreadsheetSetting && selectedContextBundle?.project);
-  const activeProjectId = hasSourceSpreadsheetSetting ? selectedProjectId : manualProjectCanOpen ? selectedContextProjectId : '';
+  const activeProjectId = hasSourceSpreadsheetSetting
+    ? selectedProjectId
+    : manualProjectCanOpen
+      ? selectedContextProjectId
+      : '';
   const config = activeProjectId ? await loadSiteConfig() : null;
   const selectedBundle = hasSourceSpreadsheetSetting
     ? activeProjectId
@@ -104,11 +103,10 @@ export default async function ProjectsPage({
       <section className="workbench-layout">
         <aside className="workbench-sidebar">
           <ImportPanel
-            key={`${selectedContextGroup?.customerId || 'no-customer'}:${selectedContextGroup?.companyName || ''}`}
-            companyName={selectedContextCompanyName}
+            key={selectedGoogleSheetSetting?.updatedAt || 'no-sheet-setting'}
             initialSetting={selectedGoogleSheetSetting}
           />
-          {hasSourceSpreadsheetSetting ? (
+          {/* {hasSourceSpreadsheetSetting ? (
             <section className="card">
               <p className="eyebrow" style={{ marginBottom: 14 }}>
                 件数
@@ -126,7 +124,7 @@ export default async function ProjectsPage({
                 <StatCard label="請求対象" value={String(totalSelected)} />
               </div>
             </section>
-          ) : null}
+          ) : null} */}
           <CreateProjectPanel />
 
           {hasSourceSpreadsheetSetting ? (
@@ -210,7 +208,7 @@ export default async function ProjectsPage({
                         fontWeight: 700
                       }}
                     >
-                      {selectedBundle.project.customerName} 様
+                      {selectedBundle.project.customerName}
                     </h2>
                     <p style={{ margin: '10px 0 0' }}>
                       {selectedBundle.project.invoiceRecipient}
@@ -306,17 +304,12 @@ function buildCustomerGroups(projects: ProjectSummary[]) {
   return Array.from(groups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName, 'ja'));
 }
 
-function filterProjectsByConfiguredShops(projects: ProjectSummary[], settings: { shopKey: string; updatedAt: string }[]) {
-  if (settings.length === 0) {
+function filterProjectsBySelectedSheet(projects: ProjectSummary[], settingUpdatedAt: string) {
+  if (!settingUpdatedAt) {
     return [];
   }
 
-  const settingsByShopKey = new Map(settings.map((setting) => [setting.shopKey, setting.updatedAt]));
-  return projects.filter((project) => {
-    const settingUpdatedAt = settingsByShopKey.get(project.companyName);
-    if (!settingUpdatedAt) return false;
-    return (project.lastImportedAt || '') >= settingUpdatedAt;
-  });
+  return projects.filter((project) => (project.lastImportedAt || '') >= settingUpdatedAt);
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {

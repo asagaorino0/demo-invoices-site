@@ -14,6 +14,12 @@ export interface InvoicePreviewRow {
   total: number | '';
 }
 
+export const DEFAULT_PROJECT_SUBJECT = '介護美容施術料';
+
+export function getProjectSubject(project: Pick<Project, 'subject'>): string {
+  return String(project.subject || '').trim() || DEFAULT_PROJECT_SUBJECT;
+}
+
 export function calcHistoryAmounts(
   line: ServiceLine,
   config: Pick<SiteConfig, 'defaultTaxRate'>

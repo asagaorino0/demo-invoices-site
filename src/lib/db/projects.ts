@@ -56,6 +56,7 @@ export interface PersistImportResult {
 export interface UpdateProjectHeaderInput {
   projectId: string;
   customerName: string;
+  subject: string;
   defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
   invoiceRecipient: string;
   facilityName: string;
@@ -92,6 +93,7 @@ export interface ProjectExportBundle {
 export interface CreateProjectInput {
   customerId: string;
   customerName: string;
+  subject: string;
   defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
   invoiceRecipient: string;
   facilityName: string;
@@ -198,6 +200,7 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
           input.importId,
           project.customerId,
           project.customerName,
+          project.subject,
           project.defaultInvoiceDateMode,
           project.invoiceRecipient,
           project.facilityName,
@@ -381,6 +384,7 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
     const result = await db.query<Project>(updateProjectHeaderSql, [
       input.projectId,
       input.customerName,
+      input.subject,
       input.defaultInvoiceDateMode,
       input.invoiceRecipient,
       input.facilityName,
@@ -401,6 +405,7 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
     const nextProject: Project = {
       ...project,
       customerName: input.customerName,
+      subject: input.subject,
       defaultInvoiceDateMode: input.defaultInvoiceDateMode,
       invoiceRecipient: input.invoiceRecipient,
       facilityName: input.facilityName,
@@ -643,6 +648,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       id,
       input.customerId,
       input.customerName,
+      input.subject,
       input.defaultInvoiceDateMode,
       input.invoiceRecipient,
       input.facilityName,
@@ -662,6 +668,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       importId: null,
       customerId: input.customerId,
       customerName: input.customerName,
+      subject: input.subject,
       defaultInvoiceDateMode: input.defaultInvoiceDateMode,
       invoiceRecipient: input.invoiceRecipient,
       facilityName: input.facilityName,

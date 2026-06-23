@@ -3,6 +3,7 @@ import type { ExtraCharge, InvoiceCsvRow } from '../../types';
 const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   userid: 'userId',
   username: 'userName',
+  subject: 'subject',
   defaultinvoicedatemode: 'defaultInvoiceDateMode',
   invoicerecipient: 'invoiceRecipient',
   facilityname: 'facilityName',
@@ -28,6 +29,7 @@ const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   remarks: 'remarks',
   memo: 'memo',
   visible: 'visible',
+  件名: 'subject',
   請求日タイプ: 'defaultInvoiceDateMode',
   表示: 'visible'
 };

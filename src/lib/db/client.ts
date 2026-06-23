@@ -62,4 +62,8 @@ async function ensureSchemaCompatibility(db: DatabaseClient): Promise<void> {
     add column if not exists default_invoice_date_mode text not null default 'monthEnd'
       check (default_invoice_date_mode in ('visit', 'monthEnd', 'custom'))
   `);
+  await db.query(`
+    alter table projects
+    add column if not exists subject text not null default ''
+  `);
 }
