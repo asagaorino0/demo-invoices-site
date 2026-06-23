@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type GoogleSheetSetting } from '../../types';
 
+type SourceSheetMode = 'existing' | 'create';
+
 interface ImportResult {
   importId: string;
   projectCount: number;
@@ -28,9 +30,11 @@ interface SaveSettingResult {
 }
 
 export function ImportPanel({
-  initialSetting
+  initialSetting,
+  withinDialog = false
 }: {
   initialSetting: GoogleSheetSetting | null;
+  withinDialog?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,6 +57,7 @@ export function ImportPanel({
     sheetName: initialSetting?.sheetName || 'invoices',
     historySheetName: initialSetting?.historySheetName || 'history'
   });
+  const [mode, setMode] = useState<SourceSheetMode | null>(withinDialog ? null : 'existing');
   const hasSourceSpreadsheet = Boolean(setting);
   const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
 
@@ -74,10 +79,7 @@ export function ImportPanel({
       return;
     }
 
-    const result = data as ImportResult;
-    setMessage(
-      `スプレッドシート取込完了！`
-    );
+    setMessage('スプレッドシート取込完了！');
 
     startSheetTransition(() => {
       router.refresh();
@@ -85,6 +87,8 @@ export function ImportPanel({
   }
 
   async function saveSetting() {
+    setMessage('');
+    setError('');
     setSettingMessage('');
     setSettingError('');
 
@@ -123,10 +127,8 @@ export function ImportPanel({
       spreadsheetTitle: '',
       spreadsheetUrlOrId: data.created?.spreadsheetUrl || data.setting?.spreadsheetId || current.spreadsheetUrlOrId
     }));
-    setSettingMessage(data.message || 'スプレッドシート設定を保存しました。');
-    startSaveTransition(() => {
-      router.refresh();
-    });
+    setSettingMessage('スプレッドシート設定を保存しました。取り込みを開始します...');
+    await importFromGoogleSheet();
   }
 
   function startGoogleOauthCreate() {
@@ -152,60 +154,101 @@ export function ImportPanel({
   }
 
   return (
-    <article className="card">
-      <p className="eyebrow" style={{ marginBottom: 10 }}>
-        GOOGLE SHEETS
-      </p>
-      <h2>Source スプレッドシート</h2>
+    <article className={withinDialog ? undefined : 'card'}>
+      {withinDialog ? null : (
+        <>
+          <p className="eyebrow" style={{ marginBottom: 10 }}>
+            GOOGLE SHEETS
+          </p>
+          <h2>Source スプレッドシート</h2>
+        </>
+      )}
       <p>この画面で利用する共通の source スプレッドシートを設定します。</p>
 
-      <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-        <input
-          placeholder="新規作成するスプレッドシート名"
-          value={form.spreadsheetTitle}
-          onChange={(e) => setForm((current) => ({ ...current, spreadsheetTitle: e.target.value }))}
-          disabled={savePending}
-        />
-        <input
-          placeholder="既存の Google スプレッドシート URL または ID"
-          value={form.spreadsheetUrlOrId}
-          onChange={(e) => setForm((current) => ({ ...current, spreadsheetUrlOrId: e.target.value }))}
-          disabled={savePending}
-        />
-        <input
-          placeholder="シート名"
-          value={form.sheetName}
-          onChange={(e) => setForm((current) => ({ ...current, sheetName: e.target.value }))}
-          disabled={savePending}
-        />
-        <input
-          placeholder="履歴シート名（任意）"
-          value={form.historySheetName}
-          onChange={(e) => setForm((current) => ({ ...current, historySheetName: e.target.value }))}
-          disabled={savePending}
-        />
-      </div>
+      {withinDialog && !mode ? (
+        <div className="dialog-choice-grid">
+          <button type="button" className="dialog-choice-button" onClick={() => setMode('existing')}>
+            <span className="dialog-choice-title">既存のスプレッドシートを選択</span>
+            <span className="dialog-choice-copy">Google スプレッドシートの URL を貼り付けて接続します。</span>
+          </button>
+          <button type="button" className="dialog-choice-button" onClick={() => setMode('create')}>
+            <span className="dialog-choice-title">新規スプレッドシートを作成</span>
+            <span className="dialog-choice-copy">Google 認証後に Drive 上へ新しいスプレッドシートを作成します。</span>
+          </button>
+        </div>
+      ) : null}
 
-      <div className="hero-actions" style={{ marginTop: 16 }}>
-        <button
-          className={`button-link ${hasSourceSpreadsheet ? 'secondary' : 'primary'}`}
-          type="button"
-          onClick={() => void saveSetting()}
-          disabled={savePending}
-          style={{ width: '100%' }}
-        >
-          {savePending ? 'スプレッドシートの設定中...' : 'スプレッドシートの設定'}
-        </button>
-        <button
-          className="button-link secondary"
-          type="button"
-          onClick={startGoogleOauthCreate}
-          disabled={savePending}
-          style={{ width: '100%' }}
-        >
-          Google で認証して新規スプレッドシートを作成
-        </button>
-      </div>
+      {mode ? (
+        <>
+          {withinDialog ? (
+            <div className="hero-actions" style={{ marginTop: 16 }}>
+              <button className="button-link secondary" type="button" onClick={() => setMode(null)}>
+                戻る
+              </button>
+            </div>
+          ) : null}
+
+          <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
+            {mode === 'create' ? (
+              <input
+                placeholder="新規作成するスプレッドシート名"
+                value={form.spreadsheetTitle}
+                onChange={(e) => setForm((current) => ({ ...current, spreadsheetTitle: e.target.value }))}
+                disabled={savePending}
+              />
+            ) : (
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ display: 'block', fontSize: 12, color: '#666' }}>Google スプレッドシートの URL</label>
+                <input
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  value={form.spreadsheetUrlOrId}
+                  onChange={(e) => setForm((current) => ({ ...current, spreadsheetUrlOrId: e.target.value }))}
+                  disabled={savePending}
+                />
+                <p className="source-meta" style={{ margin: 0 }}>
+                  通常は URL をそのまま貼り付ければ大丈夫です。必要な場合だけ、URL の `/d/` と `/edit` の間にある文字列も使えます。
+                </p>
+              </div>
+            )}
+            <input
+              placeholder="シート名"
+              value={form.sheetName}
+              onChange={(e) => setForm((current) => ({ ...current, sheetName: e.target.value }))}
+              disabled={savePending}
+            />
+            <input
+              placeholder="履歴シート名（任意）"
+              value={form.historySheetName}
+              onChange={(e) => setForm((current) => ({ ...current, historySheetName: e.target.value }))}
+              disabled={savePending}
+            />
+          </div>
+
+          <div className="hero-actions" style={{ marginTop: 16 }}>
+            {mode === 'existing' ? (
+              <button
+                className={`button-link ${hasSourceSpreadsheet ? 'secondary' : 'primary'}`}
+                type="button"
+                onClick={() => void saveSetting()}
+                disabled={savePending}
+                style={{ width: '100%' }}
+              >
+                {savePending ? 'スプレッドシートの設定中...' : 'スプレッドシートの設定'}
+              </button>
+            ) : (
+              <button
+                className="button-link secondary"
+                type="button"
+                onClick={startGoogleOauthCreate}
+                disabled={savePending}
+                style={{ width: '100%' }}
+              >
+                Google で認証して新規スプレッドシートを作成
+              </button>
+            )}
+          </div>
+        </>
+      ) : null}
 
       {settingMessage ? <div className="note">{settingMessage}</div> : null}
       {settingError ? (
@@ -223,7 +266,7 @@ export function ImportPanel({
         新規作成では Google 認証画面へ移動し、あなたの Drive に作成したあとサービスアカウントへ編集権限を付与します。
       </div>
 
-      <div style={{ display: 'grid', gap: 12, marginTop: 16, marginBottom: 18 }}>
+      {/* <div style={{ display: 'grid', gap: 12, marginTop: 16, marginBottom: 18 }}>
         <button
           className={`button-link ${hasSourceSpreadsheet && !message ? 'primary' : 'secondary'}`}
           type="button"
@@ -233,7 +276,7 @@ export function ImportPanel({
         >
           {sheetPending ? 'スプレッドシート取込中...' : 'スプレッドシートから取り込む'}
         </button>
-      </div>
+      </div> */}
 
       {message ? <div className="note">{message}</div> : null}
       {error ? (

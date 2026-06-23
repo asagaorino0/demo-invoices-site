@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { listProjectSummaries, getProjectDetail } from '../../lib/store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, getProjectStatusLabel, type ProjectSummary } from '../../types';
-import { ImportPanel } from './import-panel';
 import { CreateProjectPanel } from './create-project-panel';
 import { ProjectEditor } from './[projectId]/project-editor';
 import { loadSiteConfig } from '../../lib/site-config';
 import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
+import { SourceSheetDialog } from './source-sheet-dialog';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +81,7 @@ export default async function ProjectsPage({
   return (
     <main className="page-shell">
       <section className="hero">
+        <SourceSheetDialog initialSetting={selectedGoogleSheetSetting} />
         <p className="eyebrow">INVOICE WORKBENCH</p>
         <h1 className="page-title-static">請求書デモ</h1>
         <p>
@@ -102,10 +103,6 @@ export default async function ProjectsPage({
 
       <section className="workbench-layout">
         <aside className="workbench-sidebar">
-          <ImportPanel
-            key={selectedGoogleSheetSetting?.updatedAt || 'no-sheet-setting'}
-            initialSetting={selectedGoogleSheetSetting}
-          />
           {/* {hasSourceSpreadsheetSetting ? (
             <section className="card">
               <p className="eyebrow" style={{ marginBottom: 14 }}>

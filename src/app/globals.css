@@ -43,6 +43,7 @@ a {
 }
 
 .hero {
+  position: relative;
   padding: 34px 40px;
   border: 1px solid rgba(150, 21, 95, 0.08);
   border-radius: 34px;
@@ -118,6 +119,31 @@ a {
 
 .button-link:disabled {
   cursor: default;
+}
+
+.hero-settings-button {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(150, 21, 95, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff, #fff8fb);
+  color: var(--accent-strong);
+  box-shadow: 0 10px 24px rgba(109, 19, 68, 0.08);
+  cursor: pointer;
+}
+
+.hero-settings-button .h-4 {
+  height: 1rem;
+}
+
+.hero-settings-button .w-4 {
+  width: 1rem;
 }
 
 .grid {
@@ -220,6 +246,97 @@ a {
   font-size: 14px;
   color: var(--muted);
   word-break: break-word;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(62, 24, 46, 0.24);
+  backdrop-filter: blur(8px);
+}
+
+.dialog-card {
+  width: min(680px, 100%);
+  max-height: min(88vh, 960px);
+  overflow: auto;
+  padding: 26px;
+  border: 1px solid rgba(150, 21, 95, 0.12);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 249, 252, 0.96));
+  box-shadow: var(--shadow);
+}
+
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+
+.dialog-close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dialog-choice-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.dialog-choice-button {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 18px 20px;
+  border: 1px solid rgba(150, 21, 95, 0.2);
+  border-radius: 22px;
+  background: linear-gradient(180deg, #fdf1f6, #f9e4ee);
+  color: var(--accent-strong);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(150, 21, 95, 0.05);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.dialog-choice-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(150, 21, 95, 0.3);
+  box-shadow: 0 8px 18px rgba(150, 21, 95, 0.08);
+}
+
+.dialog-choice-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.dialog-choice-copy {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 .visually-hidden-file-input {
@@ -503,8 +620,22 @@ a {
     border-radius: 26px;
   }
 
+  .hero-settings-button {
+    top: 18px;
+    right: 18px;
+  }
+
   .button-link {
     width: 100%;
+  }
+
+  .dialog-backdrop {
+    padding: 16px;
+  }
+
+  .dialog-card {
+    padding: 22px 18px;
+    max-height: 92vh;
   }
 
   .workbench-tabbar {
