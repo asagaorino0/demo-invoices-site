@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type GoogleSheetSetting } from '../../types';
 
 interface ImportResult {
@@ -33,12 +33,19 @@ export function ImportPanel({
   initialSetting: GoogleSheetSetting | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [sheetPending, startSheetTransition] = useTransition();
   const [savePending, startSaveTransition] = useTransition();
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [settingMessage, setSettingMessage] = useState('');
-  const [settingError, setSettingError] = useState('');
+  const initialGoogleSheetStatus = searchParams.get('googleSheetStatus');
+  const initialGoogleSheetMessage = searchParams.get('googleSheetMessage') || '';
+  const [message, setMessage] = useState(initialGoogleSheetStatus === 'success' ? initialGoogleSheetMessage : '');
+  const [error, setError] = useState(initialGoogleSheetStatus === 'error' ? initialGoogleSheetMessage : '');
+  const [settingMessage, setSettingMessage] = useState(
+    initialGoogleSheetStatus === 'success' ? initialGoogleSheetMessage : ''
+  );
+  const [settingError, setSettingError] = useState(
+    initialGoogleSheetStatus === 'error' ? initialGoogleSheetMessage : ''
+  );
   const [setting, setSetting] = useState<GoogleSheetSetting | null>(initialSetting);
   const [form, setForm] = useState({
     spreadsheetTitle: '',
@@ -77,17 +84,11 @@ export function ImportPanel({
     });
   }
 
-  async function saveSetting(options?: { createNew?: boolean }) {
+  async function saveSetting() {
     setSettingMessage('');
     setSettingError('');
-    const createNew = Boolean(options?.createNew);
 
-    if (createNew && !form.spreadsheetTitle.trim()) {
-      setSettingError('新規作成するスプレッドシート名を入力してください。');
-      return;
-    }
-
-    if (!createNew && !form.spreadsheetUrlOrId.trim()) {
+    if (!form.spreadsheetUrlOrId.trim()) {
       setSettingError('既存のスプレッドシート URL または ID を入力してください。');
       return;
     }
@@ -102,7 +103,6 @@ export function ImportPanel({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         settingKey,
-        createNew,
         spreadsheetTitle: form.spreadsheetTitle,
         spreadsheetUrlOrId: form.spreadsheetUrlOrId,
         sheetName: form.sheetName,
@@ -113,12 +113,7 @@ export function ImportPanel({
     const data = (await response.json()) as SaveSettingResult;
 
     if (!response.ok || !data.setting) {
-      setSettingError(
-        data.message ||
-          (createNew
-            ? `新規スプレッドシートの作成に失敗しました。(${response.status})`
-            : `スプレッドシート設定を保存できませんでした。(${response.status})`)
-      );
+      setSettingError(data.message || `スプレッドシート設定を保存できませんでした。(${response.status})`);
       return;
     }
 
@@ -132,6 +127,28 @@ export function ImportPanel({
     startSaveTransition(() => {
       router.refresh();
     });
+  }
+
+  function startGoogleOauthCreate() {
+    setSettingMessage('');
+    setSettingError('');
+
+    if (!form.spreadsheetTitle.trim()) {
+      setSettingError('新規作成するスプレッドシート名を入力してください。');
+      return;
+    }
+
+    if (!form.sheetName.trim()) {
+      setSettingError('シート名を入力してください。');
+      return;
+    }
+
+    const params = new URLSearchParams({
+      spreadsheetTitle: form.spreadsheetTitle,
+      sheetName: form.sheetName,
+      historySheetName: form.historySheetName
+    });
+    window.location.href = `/api/google/auth?${params.toString()}`;
   }
 
   return (
@@ -182,11 +199,11 @@ export function ImportPanel({
         <button
           className="button-link secondary"
           type="button"
-          onClick={() => void saveSetting({ createNew: true })}
+          onClick={startGoogleOauthCreate}
           disabled={savePending}
           style={{ width: '100%' }}
         >
-          {savePending ? 'スプレッドシートを作成中...' : '新規スプレッドシートを作成して設定'}
+          Google で認証して新規スプレッドシートを作成
         </button>
       </div>
 
@@ -203,7 +220,7 @@ export function ImportPanel({
           : '取込元の source スプレッドシートは未設定です。今表示中の案件は過去に保存済みのデータです。'}
       </div>
       <div className="source-meta" style={{ marginTop: 8 }}>
-        新規作成した場合、所有者は Google サービスアカウントになります。必要なら作成後にお客様へ共有してください。
+        新規作成では Google 認証画面へ移動し、あなたの Drive に作成したあとサービスアカウントへ編集権限を付与します。
       </div>
 
       <div style={{ display: 'grid', gap: 12, marginTop: 16, marginBottom: 18 }}>

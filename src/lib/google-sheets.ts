@@ -67,6 +67,12 @@ export interface CreateGoogleSheetTargetResult {
   historySheetName: string;
 }
 
+export interface GoogleUserOAuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiryDate?: number;
+}
+
 interface GoogleSheetHistoryRecord {
   savedAt: string;
   action: string;
@@ -299,6 +305,127 @@ export async function createGoogleSheetTarget(
     sheetName,
     historySheetName
   };
+}
+
+export async function exchangeGoogleOAuthCode(input: {
+  code: string;
+  redirectUri: string;
+}): Promise<GoogleUserOAuthTokens> {
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Google OAuth の設定が不足しています。.env.local に GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET を設定してください。');
+  }
+
+  const response = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      code: input.code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: input.redirectUri,
+      grant_type: 'authorization_code'
+    })
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Google OAuth トークンの交換に失敗しました: ${text}`);
+  }
+
+  const data = JSON.parse(text) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+
+  if (!data.access_token) {
+    throw new Error('Google OAuth の応答に access_token がありませんでした。');
+  }
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiryDate: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined
+  };
+}
+
+export async function createGoogleSheetTargetWithUserAccessToken(input: {
+  accessToken: string;
+  title: string;
+  sheetName: string;
+  historySheetName?: string | null;
+}): Promise<CreateGoogleSheetTargetResult> {
+  const sheetName = String(input.sheetName || '').trim();
+  const historySheetName = String(input.historySheetName || '').trim() || 'history';
+  const title = String(input.title || '').trim();
+
+  if (!title) {
+    throw new Error('新規作成するスプレッドシート名を入力してください。');
+  }
+  if (!sheetName) {
+    throw new Error('シート名を入力してください。');
+  }
+
+  const created = await createSpreadsheet({
+    accessToken: input.accessToken,
+    title,
+    sheetName,
+    historySheetName
+  });
+
+  await updateSheetValues({
+    accessToken: input.accessToken,
+    spreadsheetId: created.spreadsheetId,
+    range: `${toSheetRangePrefix(sheetName)}!A1`,
+    values: [Array.from(INVOICE_CSV_HEADERS)]
+  });
+
+  await updateSheetValues({
+    accessToken: input.accessToken,
+    spreadsheetId: created.spreadsheetId,
+    range: `${toSheetRangePrefix(historySheetName)}!A1`,
+    values: [Array.from(HISTORY_HEADERS)]
+  });
+
+  return {
+    spreadsheetId: created.spreadsheetId,
+    spreadsheetUrl: created.spreadsheetUrl,
+    sheetName,
+    historySheetName
+  };
+}
+
+export async function grantSpreadsheetAccessToServiceAccount(input: {
+  accessToken: string;
+  spreadsheetId: string;
+  serviceAccountEmail: string;
+}): Promise<void> {
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(input.spreadsheetId)}/permissions?supportsAllDrives=true&sendNotificationEmail=false`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${input.accessToken}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        role: 'writer',
+        type: 'user',
+        emailAddress: input.serviceAccountEmail
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`作成したスプレッドシートをサービスアカウントへ共有できませんでした: ${text}`);
+  }
 }
 
 export function getGoogleSheetsErrorStatus(error: unknown): number | null {

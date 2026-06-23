@@ -1,8 +1,4 @@
-import {
-  createGoogleSheetTarget,
-  getGoogleSheetsErrorStatus,
-  verifyGoogleSheetTarget
-} from '../../../lib/google-sheets';
+import { getGoogleSheetsErrorStatus, verifyGoogleSheetTarget } from '../../../lib/google-sheets';
 import { getGoogleSheetSetting, upsertGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../types';
 
@@ -28,17 +24,13 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const body = (await request.json()) as {
       settingKey?: string;
-      createNew?: boolean;
-      spreadsheetTitle?: string;
       spreadsheetUrlOrId?: string;
       sheetName?: string;
       historySheetName?: string | null;
     };
 
     const settingKey = String(body.settingKey || '').trim() || DEFAULT_GOOGLE_SHEET_SETTING_KEY;
-    const createNew = Boolean(body.createNew);
-    const spreadsheetTitle = String(body.spreadsheetTitle || '').trim();
-    const requestedSpreadsheetId = extractSpreadsheetId(String(body.spreadsheetUrlOrId || '').trim());
+    const spreadsheetId = extractSpreadsheetId(String(body.spreadsheetUrlOrId || '').trim());
     const sheetName = String(body.sheetName || '').trim();
     const historySheetName = String(body.historySheetName || '').trim() || null;
 
@@ -49,28 +41,12 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    if (!createNew && !requestedSpreadsheetId) {
+    if (!spreadsheetId) {
       return Response.json(
         { error: 'spreadsheet_id_required', message: 'スプレッドシートURLまたはIDを入力してください。' },
         { status: 400 }
       );
     }
-
-    if (createNew && !spreadsheetTitle) {
-      return Response.json(
-        { error: 'spreadsheet_title_required', message: '新規作成するスプレッドシート名を入力してください。' },
-        { status: 400 }
-      );
-    }
-
-    const created = createNew
-      ? await createGoogleSheetTarget({
-        title: spreadsheetTitle,
-        sheetName,
-        historySheetName
-      })
-      : null;
-    const spreadsheetId = created?.spreadsheetId || requestedSpreadsheetId;
 
     const verified = await verifyGoogleSheetTarget({
       spreadsheetId,
@@ -88,10 +64,7 @@ export async function POST(request: Request): Promise<Response> {
       ok: true,
       setting,
       verified,
-      created,
-      message: createNew
-        ? 'スプレッドシートを新規作成して設定しました。サービスアカウントでアクセス確認済みです。'
-        : 'スプレッドシート設定を保存しました。サービスアカウントでアクセス確認済みです。'
+      message: 'スプレッドシート設定を保存しました。サービスアカウントでアクセス確認済みです。'
     });
   } catch (error) {
     const status = getGoogleSheetsErrorStatus(error) || 500;

@@ -55,6 +55,9 @@ Google Sheets を正本にする運用なら、まずは Google Sheets 用の en
 ```env
 GOOGLE_SERVICE_ACCOUNT_EMAIL=service-account@your-project.iam.gserviceaccount.com
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+GOOGLE_CLIENT_ID=xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/google/callback
 ```
 
 スプレッドシートの URL / ID、シート名、履歴シート名は `.env.local` ではなく `/projects` 画面から保存します。
@@ -91,9 +94,11 @@ Google Sheets 連携の初回セットアップ手順:
 5. 作成したサービスアカウントの `キー` タブで `新しいキーを作成` -> `JSON` を選ぶ
 6. ダウンロードした JSON の `client_email` を `GOOGLE_SERVICE_ACCOUNT_EMAIL` に入れる
 7. 同じ JSON の `private_key` を `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` に入れる
-8. 対象スプレッドシートをサービスアカウントのメールアドレスへ `編集者` として共有する
-9. `/projects` 画面の `Source スプレッドシート` カードで、既存のスプレッドシート URL / ID を入れて保存するか、その場で新規作成する
-10. 同じカードで対象タブ名を入れ、必要なら履歴シート名も入れて保存する
+8. 既存シートを使う場合は、対象スプレッドシートをサービスアカウントのメールアドレスへ `編集者` として共有する
+9. 画面から新規作成したい場合は、同じ Google Cloud プロジェクトで OAuth クライアントを作成し、`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` を設定する
+10. OAuth 同意画面で `http://localhost:3000/api/google/callback` をリダイレクト URI に追加する
+11. `/projects` 画面の `Source スプレッドシート` カードで、既存のスプレッドシート URL / ID を入れて保存するか、Google 認証経由でその場で新規作成する
+12. 同じカードで対象タブ名を入れ、必要なら履歴シート名も入れて保存する
 
 `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` は複数行の鍵ですが、`.env.local` では `\n` を含む 1 行文字列として入れます。
 
@@ -104,7 +109,8 @@ Google Sheets 連携の初回セットアップ手順:
 - 権限は `編集者` を選びます
 - Google アカウント本人ではなく、サービスアカウントのメールアドレスに共有する必要があります
 - 共有後に `/projects` へ戻り、`Source スプレッドシート` カードで設定保存すると接続確認も兼ねられます
-- 画面から新規作成する場合、そのスプレッドシートの所有者はサービスアカウントになります
+- 画面から新規作成する場合、そのスプレッドシートの所有者は Google 認証したユーザー本人になります
+- 作成直後に、アプリがサービスアカウントへ自動で `編集者` 権限を付与します
 
 ### 3. DB schema を流す
 
