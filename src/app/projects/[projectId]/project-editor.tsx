@@ -18,6 +18,7 @@ import {
   getReceiptIssueDate
 } from '../../../lib/invoice/preview';
 import { getMonthKey } from '../../../lib/csv/shared';
+import { useWorkbenchSidebar } from '../workbench-layout-shell';
 
 interface ProjectEditorProps {
   config: SiteConfig;
@@ -124,6 +125,7 @@ export function ProjectEditor({
   serviceLines,
   invoiceSelections
 }: ProjectEditorProps) {
+  const { setSidebarCollapsed } = useWorkbenchSidebar();
   const router = useRouter();
   const invoicePrintRef = useRef<HTMLDivElement | null>(null);
   const receiptPrintRef = useRef<HTMLDivElement | null>(null);
@@ -379,6 +381,11 @@ export function ProjectEditor({
     });
     return limitMonthGroups(Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0], 'ja')));
   }, [collectedLines]);
+
+  useEffect(() => {
+    setSidebarCollapsed(activeTab === 'invoice');
+    return () => setSidebarCollapsed(false);
+  }, [activeTab, setSidebarCollapsed]);
 
   useEffect(() => {
     dragOverTargetRef.current = dragOverTarget;
@@ -1118,6 +1125,208 @@ export function ProjectEditor({
     };
   }
 
+  function renderUncollectedPanel(options?: { compact?: boolean; showDebug?: boolean }) {
+    const compact = options?.compact ?? false;
+    const showDebug = options?.showDebug ?? false;
+
+    return (
+      <>
+        <div
+          style={{
+            display: 'flex',
+            gap: 12,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            marginBottom: 18
+          }}
+        >
+          <div style={{ fontSize: compact ? 16 : 18, fontWeight: 600 }}>選択した項目 {filteredSelectedLineIds.length}件</div>
+          {monthGroups.map(([monthKey, lines]) => {
+            const allSelected = lines.every((line) => filteredSelectedLineIds.includes(line.id));
+            return (
+              <button
+                key={monthKey}
+                className={`month-chip${allSelected ? ' active' : ''}`}
+                type="button"
+                onClick={() => toggleMonthSelection(monthKey)}
+              >
+                {monthKey}
+              </button>
+            );
+          })}
+          <button
+            className="month-chip action"
+            type="button"
+            onClick={() =>
+              setSelectedLineIds((current) =>
+                appendIdsPreservingCurrentOrder(
+                  current.filter((id) => displayOrderIds.includes(id)),
+                  uncollectedLines.map((line) => line.id),
+                  displayOrderIds
+                )
+              )
+            }
+          >
+            全て選択
+          </button>
+          <button className="month-chip action" type="button" onClick={() => setSelectedLineIds([])}>
+            選択解除
+          </button>
+        </div>
+
+        {selectedUncollectedLines.length > 1 ? (
+          <>
+            <div
+              className="note"
+              style={{
+                marginBottom: 18,
+                background: '#fff2f7',
+                border: '1px solid #efbfd1',
+                color: 'var(--accent-strong)',
+                fontSize: 15,
+                fontWeight: 600,
+                letterSpacing: '0.01em'
+              }}
+            >
+              選択済みカードをドラッグして順番を並び替えできます
+              {/* <div>  {selectionSavePending ? '選択を保存中...' : ''}</div> */}
+            </div>
+
+          </>
+        ) : null}
+
+        <div style={{ display: 'grid', gap: 14 }}>
+          {uncollectedLines.length === 0 ? (
+            <p>未回収明細はありません。</p>
+          ) : (
+            orderedUncollectedLines.map((line) => {
+              const isSelected = filteredSelectedLineIds.includes(line.id);
+              const canDrag = isSelected && selectedUncollectedLines.length > 1;
+
+              return (
+                <div
+                  key={line.id}
+                  ref={(node) => {
+                    reorderCardRefs.current[getCardRefKey('uncollected', line.id)] = node;
+                  }}
+                  className={`service-line-card${canDrag ? ' draggable-selected' : ''}${draggingSelectedLineId === line.id ? ' dragging' : ''
+                    }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'before'
+                      ? ' drop-before'
+                      : ''
+                    }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'after'
+                      ? ' drop-after'
+                      : ''
+                    }`}
+                  onPointerDown={(event) => {
+                    const target = event.target as HTMLElement;
+                    if (target.closest('button')) return;
+                    beginPointerReorder(event, line.id, 'uncollected', canDrag);
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <button
+                      type="button"
+                      aria-pressed={isSelected}
+                      aria-label={isSelected ? '選択解除' : '選択'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleLine(line.id);
+                      }}
+                      style={getSelectionToggleStyle(isSelected)}
+                    >
+                      {isSelected ? '✓' : ''}
+                    </button>
+                    <div style={{ minWidth: 0, display: 'block' }}>
+                      {canDrag ? (
+                        <div
+                          data-drag-handle="true"
+                          onPointerDown={(event) => beginPointerReorder(event, line.id, 'uncollected', canDrag)}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            minHeight: 32,
+                            paddingRight: 12,
+                            marginBottom: 8,
+                            color: 'var(--muted)',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            cursor: 'grab',
+                            touchAction: 'none',
+                            userSelect: 'none'
+                          }}
+                        >
+                          DRAG TO REORDER
+                        </div>
+                      ) : null}
+                      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
+                        {line.serviceName}
+                      </div>
+                      <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 14 }}>
+                        {line.serviceDate || '日付未設定'}
+                      </div>
+                      <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                        数量: {line.quantity}
+                        {line.unit} / {line.taxIncluded ? '内税' : '外税'}
+                      </div>
+                      <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                        担当: {line.staffName || '担当未設定'}
+                      </div>
+                      {line.memo ? (
+                        <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                          メモ: {line.memo}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="service-line-side">
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
+                      ¥{line.price.toLocaleString('ja-JP')}
+                    </div>
+                    <button
+                      className={`service-line-action${line.invoiceCode ? ' is-invoiced' : ''}`}
+                      type="button"
+                      onClick={() => void toggleCollected(line)}
+                    >
+                      回収済にする
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hero-actions" style={{ marginTop: 18 }}>
+          {/* <button
+            className="button-link primary"
+            type="button"
+            onClick={() => void saveSelections()}
+            disabled={selectionSavePending}
+          >
+            {selectionSavePending ? '選択を保存中...' : '選択を保存'}
+          </button> */}
+
+          <div className="hero-actions" style={{ marginTop: 18 }}>
+            <button className="button-link primary" type="button" onClick={() => void createNewLine()}>
+              明細を追加
+            </button>
+          </div>
+        </div>
+
+        {showDebug ? (
+          <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
+            drag debug: {dragDebug.phase} / source: {dragDebug.sourceLineId || '-'} / target: {dragDebug.targetLineId || '-'}{dragDebug.placement ? ` (${dragDebug.placement})` : ''}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <>
       <section className="workbench-stage">
@@ -1156,211 +1365,38 @@ export function ProjectEditor({
 
         <article className="card workbench-list-card">
           {activeTab === 'uncollected' ? (
-            <>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 12,
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  marginBottom: 18
-                }}
-              >
-                <div style={{ fontSize: 18, fontWeight: 600 }}>選択した項目 {filteredSelectedLineIds.length}件</div>
-                {monthGroups.map(([monthKey, lines]) => {
-                  const allSelected = lines.every((line) => filteredSelectedLineIds.includes(line.id));
-                  return (
-                    <button
-                      key={monthKey}
-                      className={`month-chip${allSelected ? ' active' : ''}`}
-                      type="button"
-                      onClick={() => toggleMonthSelection(monthKey)}
-                    >
-                      {monthKey}
-                    </button>
-                  );
-                })}
-                <button
-                  className="month-chip action"
-                  type="button"
-                  onClick={() =>
-                    setSelectedLineIds((current) =>
-                      appendIdsPreservingCurrentOrder(
-                        current.filter((id) => displayOrderIds.includes(id)),
-                        uncollectedLines.map((line) => line.id),
-                        displayOrderIds
-                      )
-                    )
-                  }
-                >
-                  全て選択
-                </button>
-                <button className="month-chip action" type="button" onClick={() => setSelectedLineIds([])}>
-                  選択解除
-                </button>
-              </div>
-
-              {selectedUncollectedLines.length > 1 ? (
-                <div
-                  className="note"
-                  style={{
-                    marginBottom: 18,
-                    background: '#fff2f7',
-                    border: '1px solid #efbfd1',
-                    color: 'var(--accent-strong)',
-                    fontSize: 15,
-                    fontWeight: 600,
-                    letterSpacing: '0.01em'
-                  }}
-                >
-                  選択済みカードをドラッグして順番を並び替えできます
-                </div>
-              ) : null}
-
-              <div style={{ display: 'grid', gap: 14 }}>
-                {uncollectedLines.length === 0 ? (
-                  <p>未回収明細はありません。</p>
-                ) : (
-                  orderedUncollectedLines.map((line) => {
-                    const isSelected = filteredSelectedLineIds.includes(line.id);
-                    const canDrag = isSelected && selectedUncollectedLines.length > 1;
-
-                    return (
-                      <div
-                        key={line.id}
-                        ref={(node) => {
-                          reorderCardRefs.current[getCardRefKey('uncollected', line.id)] = node;
-                        }}
-                        className={`service-line-card${canDrag ? ' draggable-selected' : ''}${draggingSelectedLineId === line.id ? ' dragging' : ''
-                          }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'before'
-                            ? ' drop-before'
-                            : ''
-                          }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'after'
-                            ? ' drop-after'
-                            : ''
-                          }`}
-                        onPointerDown={(event) => {
-                          const target = event.target as HTMLElement;
-                          if (target.closest('button')) return;
-                          beginPointerReorder(event, line.id, 'uncollected', canDrag);
-                        }}
-                      >
-                        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                          <button
-                            type="button"
-                            aria-pressed={isSelected}
-                            aria-label={isSelected ? '選択解除' : '選択'}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              toggleLine(line.id);
-                            }}
-                            style={getSelectionToggleStyle(isSelected)}
-                          >
-                            {isSelected ? '✓' : ''}
-                          </button>
-                          <div style={{ minWidth: 0, display: 'block' }}>
-                            {canDrag ? (
-                              <div
-                                data-drag-handle="true"
-                                onPointerDown={(event) =>
-                                  beginPointerReorder(event, line.id, 'uncollected', canDrag)
-                                }
-                                onContextMenu={(event) => {
-                                  event.preventDefault();
-                                }}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  minHeight: 32,
-                                  paddingRight: 12,
-                                  marginBottom: 8,
-                                  color: 'var(--muted)',
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  letterSpacing: '0.04em',
-                                  cursor: 'grab',
-                                  touchAction: 'none',
-                                  userSelect: 'none'
-                                }}
-                              >
-                                DRAG TO REORDER
-                              </div>
-                            ) : null}
-                            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
-                              {line.serviceName}
-                            </div>
-                            <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 14 }}>
-                              {line.serviceDate || '日付未設定'}
-                            </div>
-                            <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                              数量: {line.quantity}
-                              {line.unit} / {line.taxIncluded ? '内税' : '外税'}
-                            </div>
-                            <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                              担当: {line.staffName || '担当未設定'}
-                            </div>
-                            {line.memo ? (
-                              <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                                メモ: {line.memo}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="service-line-side">
-                          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
-                            ¥{line.price.toLocaleString('ja-JP')}
-                          </div>
-                          <button
-                            className={`service-line-action${line.invoiceCode ? ' is-invoiced' : ''}`}
-                            type="button"
-                            onClick={() => void toggleCollected(line)}
-                          >
-                            回収済にする
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              <div className="hero-actions" style={{ marginTop: 18 }}>
-                <button
-                  className="button-link primary"
-                  type="button"
-                  onClick={() => void saveSelections()}
-                  disabled={selectionSavePending}
-                >
-                  {selectionSavePending ? '選択を保存中...' : '選択を保存'}
-                </button>
-              </div>
-              <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
-                drag debug: {dragDebug.phase} / source: {dragDebug.sourceLineId || '-'} / target: {dragDebug.targetLineId || '-'}{dragDebug.placement ? ` (${dragDebug.placement})` : ''}
-              </div>
-            </>
+            renderUncollectedPanel({ showDebug: true })
           ) : null}
 
           {activeTab === 'invoice' ? (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-                <h2 style={{ margin: 0 }}>請求書プレビュー</h2>
-                <button className="button-link secondary" type="button" onClick={() => openPrintWindow('invoice')}>
-                  印刷 / PDF
-                </button>
+              <div className="invoice-preview-layout">
+                <section className="invoice-preview-sidebar">
+                  <h2 style={{ margin: '0 0 14px' }}>未回収</h2>
+                  {renderUncollectedPanel({ compact: true })}
+                </section>
+
+                <section className="invoice-preview-main">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                    <h2 style={{ margin: 0 }}>請求書プレビュー</h2>
+                    <button className="button-link secondary" type="button" onClick={() => openPrintWindow('invoice')}>
+                      印刷 / PDF
+                    </button>
+                  </div>
+                  {invoiceLines.length === 0 ? (
+                    <p>請求対象の未回収明細を選ぶと、ここに請求書が表示されます。</p>
+                  ) : (
+                    <div ref={invoicePrintRef}>
+                      <InvoicePreview
+                        config={config}
+                        project={previewProject}
+                        lines={invoiceLines}
+                        kind="invoice"
+                      />
+                    </div>
+                  )}
+                </section>
               </div>
-              {invoiceLines.length === 0 ? (
-                <p>請求対象の未回収明細を選ぶと、ここに請求書が表示されます。</p>
-              ) : (
-                <div ref={invoicePrintRef}>
-                  <InvoicePreview
-                    config={config}
-                    project={previewProject}
-                    lines={invoiceLines}
-                    kind="invoice"
-                  />
-                </div>
-              )}
             </>
           ) : null}
 
@@ -1603,16 +1639,16 @@ export function ProjectEditor({
               </label>
             ) : (
               <>
-            <label>
-              <div>件名</div>
-              <input
-                value={form.subject}
-                onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
-                style={inputStyle}
-              />
-            </label>
-            <label>
-              <div>請求日タイプ</div>
+                <label>
+                  <div>件名</div>
+                  <input
+                    value={form.subject}
+                    onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
+                    style={inputStyle}
+                  />
+                </label>
+                <label>
+                  <div>請求日タイプ</div>
                   <select
                     value={form.defaultInvoiceDateMode}
                     onChange={(event) =>
@@ -1864,9 +1900,9 @@ export function ProjectEditor({
                     </div>
                   ) : null}
                   <div className="hero-actions" style={{ marginTop: 18 }}>
-                    <button className="button-link secondary" type="button" onClick={() => void createNewLine()}>
+                    {/* <button className="button-link secondary" type="button" onClick={() => void createNewLine()}>
                       明細を追加
-                    </button>
+                    </button> */}
                     <button className="button-link secondary" type="button" onClick={() => void duplicateCurrentLine()}>
                       明細を複製
                     </button>

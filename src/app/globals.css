@@ -206,11 +206,18 @@ a {
 }
 
 .workbench-layout {
+  position: relative;
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 22px;
   align-items: start;
   margin-top: 24px;
+  transition: grid-template-columns 220ms ease, gap 220ms ease;
+}
+
+.workbench-layout.collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+  gap: 0;
 }
 
 .workbench-sidebar,
@@ -219,7 +226,83 @@ a {
   gap: 18px;
 }
 
+.workbench-sidebar {
+  min-width: 0;
+  overflow: hidden;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.workbench-layout.collapsed .workbench-sidebar {
+  opacity: 0;
+  transform: translateX(-28px);
+  pointer-events: none;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 20px;
+  left: 100%;
+  transform: translateX(-10px);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(150, 21, 95, 0.16);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 245, 250, 0.98));
+  color: var(--accent-strong);
+  box-shadow: 0 10px 24px rgba(109, 19, 68, 0.08);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.sidebar-toggle:hover {
+  transform: translateX(-6px);
+  box-shadow: 0 12px 28px rgba(109, 19, 68, 0.12);
+}
+
+.sidebar-toggle.collapsed {
+  left: 0;
+  transform: translateX(-10px);
+}
+
+.sidebar-toggle.collapsed:hover {
+  transform: translateX(-6px);
+}
+
+.sidebar-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(150, 21, 95, 0.08);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sidebar-toggle-label {
+  white-space: nowrap;
+}
+
 .workbench-main {
+  min-width: 0;
+}
+
+.invoice-preview-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.invoice-preview-sidebar,
+.invoice-preview-main {
   min-width: 0;
 }
 
@@ -630,6 +713,14 @@ a {
 
   .workbench-layout {
     grid-template-columns: 1fr;
+  }
+
+  .invoice-preview-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-toggle {
+    display: none;
   }
 
   .workbench-detail-grid {

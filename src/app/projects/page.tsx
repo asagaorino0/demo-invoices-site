@@ -6,6 +6,7 @@ import { loadSiteConfig } from '../../lib/site-config';
 import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 import { SourceSheetDialog } from './source-sheet-dialog';
 import { NewUserDialog } from './new-user-dialog';
+import { WorkbenchLayoutShell } from './workbench-layout-shell';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,160 +102,141 @@ export default async function ProjectsPage({
         </div>
       ) : null}
 
-      <section className="workbench-layout">
-        <aside className="workbench-sidebar">
-          {/* {hasSourceSpreadsheetSetting ? (
-            <section className="card">
-              <p className="eyebrow" style={{ marginBottom: 14 }}>
-                件数
-              </p>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  gap: 12
-                }}
-              >
-                <StatCard label="利用者" value={String(customerGroups.length)} />
-                <StatCard label="未回収件数" value={String(totalUncollected)} />
-                <StatCard label="回収済件数" value={String(totalCollected)} />
-                <StatCard label="請求対象" value={String(totalSelected)} />
-              </div>
-            </section>
-          ) : null} */}
-          <NewUserDialog />
+      <WorkbenchLayoutShell
+        sidebar={
+          <>
+            <NewUserDialog />
 
-          {hasSourceSpreadsheetSetting ? (
-            <section className="card">
-              <p className="eyebrow" style={{ marginBottom: 14 }}>
-                利用者
-              </p>
-
-              {customerGroups.length === 0 ? (
-                <p style={{ margin: 0 }}>
-                  まだ利用者がありません。まずは CSV を取り込むか、下のフォームから新規利用者を登録してください。
+            {hasSourceSpreadsheetSetting ? (
+              <section className="card">
+                <p className="eyebrow" style={{ marginBottom: 14 }}>
+                  利用者
                 </p>
-              ) : (
-                <div style={{ display: 'grid', gap: 12 }}>
-                  {customerGroups.map((group) => {
-                    const active = group.project.id === selectedProjectId;
-                    return (
-                      <Link
-                        key={group.customerId}
-                        href={`/projects?projectId=${group.project.id}`}
-                        style={{
-                          display: 'block',
-                          padding: 16,
-                          borderRadius: 22,
-                          textDecoration: 'none',
-                          border: active
-                            ? '2px solid rgba(109, 19, 68, 0.6)'
-                            : '1px solid var(--line)',
-                          background: active ? 'rgba(247, 236, 242, 0.95)' : 'rgba(255,255,255,0.7)',
-                          boxShadow: active ? '0 10px 24px rgba(109, 19, 68, 0.08)' : 'none'
-                        }}
-                      >
-                        <div
+
+                {customerGroups.length === 0 ? (
+                  <p style={{ margin: 0 }}>
+                    まだ利用者がありません。まずは CSV を取り込むか、下のフォームから新規利用者を登録してください。
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {customerGroups.map((group) => {
+                      const active = group.project.id === selectedProjectId;
+                      return (
+                        <Link
+                          key={group.customerId}
+                          href={`/projects?projectId=${group.project.id}`}
                           style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            gap: 12,
-                            alignItems: 'flex-start'
+                            display: 'block',
+                            padding: 16,
+                            borderRadius: 22,
+                            textDecoration: 'none',
+                            border: active
+                              ? '2px solid rgba(109, 19, 68, 0.6)'
+                              : '1px solid var(--line)',
+                            background: active ? 'rgba(247, 236, 242, 0.95)' : 'rgba(255,255,255,0.7)',
+                            boxShadow: active ? '0 10px 24px rgba(109, 19, 68, 0.08)' : 'none'
                           }}
                         >
-                          <div>
-                            <div style={{ fontSize: 16, fontWeight: 700 }}>{group.customerName}</div>
-                            <div style={{ color: 'var(--muted)', marginTop: 6 }}>
-                              {group.invoiceRecipient}
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              gap: 12,
+                              alignItems: 'flex-start'
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: 16, fontWeight: 700 }}>{group.customerName}</div>
+                              <div style={{ color: 'var(--muted)', marginTop: 6 }}>
+                                {group.invoiceRecipient}
+                              </div>
                             </div>
+                            <StatusPill status={group.project.status} />
                           </div>
-                          <StatusPill status={group.project.status} />
-                        </div>
-                        <div style={{ color: 'var(--muted)', marginTop: 10 }}>
-                          未回収 {group.uncollectedCount}件 / 請求対象 {group.selectedCount}件
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          ) : null}
-        </aside>
-
-        <section className="workbench-main">
-          {selectedBundle?.project && config && selectedCustomerGroup ? (
-            <>
-              <section className="card">
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: 18,
-                    flexWrap: 'wrap',
-                    alignItems: 'center'
-                  }}
-                >
-                  <div>
-                    <h2
-                      style={{
-                        margin: 0,
-                        fontSize: 'clamp(1.5rem, 2.6vw, 2.2rem)',
-                        color: '#6d1344',
-                        fontFamily: '"Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif',
-                        fontWeight: 700
-                      }}
-                    >
-                      {selectedBundle.project.customerName}
-                    </h2>
-                    <p style={{ margin: '10px 0 0' }}>
-                      {selectedBundle.project.invoiceRecipient}
-                      {selectedBundle.project.facilityName
-                        ? ` / ${selectedBundle.project.facilityName}`
-                        : ''}
-                    </p>
+                          <div style={{ color: 'var(--muted)', marginTop: 10 }}>
+                            未回収 {group.uncollectedCount}件 / 請求対象 {group.selectedCount}件
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
-
-                  <div
+                )}
+              </section>
+            ) : null}
+          </>
+        }
+      >
+        {selectedBundle?.project && config && selectedCustomerGroup ? (
+          <>
+            <section className="card">
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 18,
+                  flexWrap: 'wrap',
+                  alignItems: 'center'
+                }}
+              >
+                <div>
+                  <h2
                     style={{
-                      display: 'grid',
-                      gap: 10,
-                      minWidth: 220
+                      margin: 0,
+                      fontSize: 'clamp(1.5rem, 2.6vw, 2.2rem)',
+                      color: '#6d1344',
+                      fontFamily: '"Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif',
+                      fontWeight: 700
                     }}
                   >
-                    <InlineStat label="未回収" value={`${selectedCustomerGroup.uncollectedCount}件`} />
-                    <InlineStat label="請求対象" value={`${selectedCustomerGroup.selectedCount}件`} />
-                    <InlineStat label="回収済" value={`${selectedCustomerGroup.collectedCount}件`} />
-                  </div>
+                    {selectedBundle.project.customerName}
+                  </h2>
+                  <p style={{ margin: '10px 0 0' }}>
+                    {selectedBundle.project.invoiceRecipient}
+                    {selectedBundle.project.facilityName
+                      ? ` / ${selectedBundle.project.facilityName}`
+                      : ''}
+                  </p>
                 </div>
-              </section>
 
-              <ProjectEditor
-                key={selectedBundle.project.id}
-                config={config}
-                project={selectedBundle.project}
-                serviceLines={selectedBundle.serviceLines}
-                invoiceSelections={selectedBundle.invoiceSelections}
-              />
-            </>
-          ) : !hasSourceSpreadsheetSetting ? (
-            <section className="card">
-              <h2 style={{ marginBottom: 10 }}>先にスプレッドシート設定をしてください</h2>
-              <p style={{ marginBottom: 0 }}>
-                スプレッドシートが未設定の間は、案件一覧や利用者一覧は表示しません。上のカードで設定してから取り込みを進めてください。
-              </p>
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: 10,
+                    minWidth: 220
+                  }}
+                >
+                  <InlineStat label="未回収" value={`${selectedCustomerGroup.uncollectedCount}件`} />
+                  <InlineStat label="請求対象" value={`${selectedCustomerGroup.selectedCount}件`} />
+                  <InlineStat label="回収済" value={`${selectedCustomerGroup.collectedCount}件`} />
+                </div>
+              </div>
             </section>
-          ) : (
-            <section className="card">
-              <h2 style={{ marginBottom: 10 }}>次は取り込みです</h2>
-              <p style={{ marginBottom: 0 }}>
-                スプレッドシート設定は保存されています。まだ取り込み前なので案件は表示していません。左の
-                `スプレッドシートから取り込む` を実行してください。
-              </p>
-            </section>
-          )}
-        </section>
-      </section>
+
+            <ProjectEditor
+              key={selectedBundle.project.id}
+              config={config}
+              project={selectedBundle.project}
+              serviceLines={selectedBundle.serviceLines}
+              invoiceSelections={selectedBundle.invoiceSelections}
+            />
+          </>
+        ) : !hasSourceSpreadsheetSetting ? (
+          <section className="card">
+            <h2 style={{ marginBottom: 10 }}>先にスプレッドシート設定をしてください</h2>
+            <p style={{ marginBottom: 0 }}>
+              スプレッドシートが未設定の間は、案件一覧や利用者一覧は表示しません。上のカードで設定してから取り込みを進めてください。
+            </p>
+          </section>
+        ) : (
+          <section className="card">
+            <h2 style={{ marginBottom: 10 }}>次は取り込みです</h2>
+            <p style={{ marginBottom: 0 }}>
+              スプレッドシート設定は保存されています。まだ取り込み前なので案件は表示していません。左の
+              `スプレッドシートから取り込む` を実行してください。
+            </p>
+          </section>
+        )}
+      </WorkbenchLayoutShell>
     </main>
   );
 }
