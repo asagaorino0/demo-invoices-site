@@ -54,6 +54,8 @@ export function ImportPanel({
   const [form, setForm] = useState({
     spreadsheetTitle: '',
     spreadsheetUrlOrId: initialSetting?.spreadsheetId || '',
+    destinationFolderUrlOrId: '',
+    newFolderName: '',
     sheetName: initialSetting?.sheetName || 'invoices',
     historySheetName: initialSetting?.historySheetName || 'history'
   });
@@ -145,8 +147,15 @@ export function ImportPanel({
       return;
     }
 
+    if (form.destinationFolderUrlOrId.trim() && form.newFolderName.trim()) {
+      setSettingError('保存先フォルダは「既存フォルダ URL」か「新規フォルダ名」のどちらか一方だけ入力してください。');
+      return;
+    }
+
     const params = new URLSearchParams({
       spreadsheetTitle: form.spreadsheetTitle,
+      destinationFolderUrlOrId: form.destinationFolderUrlOrId,
+      newFolderName: form.newFolderName,
       sheetName: form.sheetName,
       historySheetName: form.historySheetName
     });
@@ -190,12 +199,38 @@ export function ImportPanel({
 
           <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
             {mode === 'create' ? (
-              <input
-                placeholder="新規作成するスプレッドシート名"
-                value={form.spreadsheetTitle}
-                onChange={(e) => setForm((current) => ({ ...current, spreadsheetTitle: e.target.value }))}
-                disabled={savePending}
-              />
+              <>
+                <input
+                  placeholder="新規作成するスプレッドシート名"
+                  value={form.spreadsheetTitle}
+                  onChange={(e) => setForm((current) => ({ ...current, spreadsheetTitle: e.target.value }))}
+                  disabled={savePending}
+                />
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ display: 'block', fontSize: 12, color: '#666' }}>保存先の既存フォルダ URL</label>
+                  <input
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    value={form.destinationFolderUrlOrId}
+                    onChange={(e) => setForm((current) => ({ ...current, destinationFolderUrlOrId: e.target.value }))}
+                    disabled={savePending}
+                  />
+                  <p className="source-meta" style={{ margin: 0 }}>
+                    既存フォルダに入れたい場合は、そのフォルダの URL を貼り付けてください。
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ display: 'block', fontSize: 12, color: '#666' }}>または新規フォルダ名</label>
+                  <input
+                    placeholder="例: 2026年請求書"
+                    value={form.newFolderName}
+                    onChange={(e) => setForm((current) => ({ ...current, newFolderName: e.target.value }))}
+                    disabled={savePending}
+                  />
+                  <p className="source-meta" style={{ margin: 0 }}>
+                    新しいフォルダを作って保存したいときだけ入力してください。両方入力した場合は使えません。
+                  </p>
+                </div>
+              </>
             ) : (
               <div style={{ display: 'grid', gap: 6 }}>
                 <label style={{ display: 'block', fontSize: 12, color: '#666' }}>Google スプレッドシートの URL</label>

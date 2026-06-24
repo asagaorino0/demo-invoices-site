@@ -25,6 +25,8 @@ function redirectToProjects(request: NextRequest, status: 'success' | 'error', m
 export async function GET(request: NextRequest) {
   try {
     const spreadsheetTitle = String(request.nextUrl.searchParams.get('spreadsheetTitle') || '').trim();
+    const destinationFolderUrlOrId = String(request.nextUrl.searchParams.get('destinationFolderUrlOrId') || '').trim();
+    const newFolderName = String(request.nextUrl.searchParams.get('newFolderName') || '').trim();
     const sheetName = String(request.nextUrl.searchParams.get('sheetName') || '').trim();
     const historySheetName = String(request.nextUrl.searchParams.get('historySheetName') || '').trim() || 'history';
 
@@ -34,6 +36,10 @@ export async function GET(request: NextRequest) {
 
     if (!sheetName) {
       return redirectToProjects(request, 'error', 'シート名を入力してください。');
+    }
+
+    if (destinationFolderUrlOrId && newFolderName) {
+      return redirectToProjects(request, 'error', '保存先フォルダは既存 URL か新規フォルダ名のどちらか一方だけ指定してください。');
     }
 
     const clientId = must(process.env.GOOGLE_CLIENT_ID, 'GOOGLE_CLIENT_ID');
@@ -46,6 +52,8 @@ export async function GET(request: NextRequest) {
       redirectUri,
       origin: request.nextUrl.origin,
       spreadsheetTitle,
+      destinationFolderUrlOrId,
+      newFolderName,
       sheetName,
       historySheetName
     });
@@ -59,7 +67,7 @@ export async function GET(request: NextRequest) {
     });
     cookieStore.set(
       OAUTH_PAYLOAD_COOKIE,
-      JSON.stringify({ spreadsheetTitle, sheetName, historySheetName }),
+      JSON.stringify({ spreadsheetTitle, destinationFolderUrlOrId, newFolderName, sheetName, historySheetName }),
       {
         httpOnly: true,
         sameSite: 'lax',
@@ -78,7 +86,7 @@ export async function GET(request: NextRequest) {
     authUrl.searchParams.set('include_granted_scopes', 'true');
     authUrl.searchParams.set(
       'scope',
-      ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.file'].join(' ')
+      ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive'].join(' ')
     );
     authUrl.searchParams.set('state', state);
 

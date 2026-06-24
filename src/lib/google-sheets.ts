@@ -358,12 +358,16 @@ export async function exchangeGoogleOAuthCode(input: {
 export async function createGoogleSheetTargetWithUserAccessToken(input: {
   accessToken: string;
   title: string;
+  destinationFolderId?: string | null;
+  newFolderName?: string | null;
   sheetName: string;
   historySheetName?: string | null;
 }): Promise<CreateGoogleSheetTargetResult> {
   const sheetName = String(input.sheetName || '').trim();
   const historySheetName = String(input.historySheetName || '').trim() || 'history';
   const title = String(input.title || '').trim();
+  const destinationFolderId = String(input.destinationFolderId || '').trim();
+  const newFolderName = String(input.newFolderName || '').trim();
 
   if (!title) {
     throw new Error('新規作成するスプレッドシート名を入力してください。');
@@ -371,6 +375,21 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
   if (!sheetName) {
     throw new Error('シート名を入力してください。');
   }
+  if (destinationFolderId && newFolderName) {
+    throw new Error('保存先フォルダは既存フォルダか新規フォルダのどちらか一方だけ指定してください。');
+  }
+
+  const parentFolderId = destinationFolderId
+    ? await ensureDriveFolderAccessible({
+        accessToken: input.accessToken,
+        folderId: destinationFolderId
+      })
+    : newFolderName
+      ? await createDriveFolder({
+          accessToken: input.accessToken,
+          folderName: newFolderName
+        })
+      : '';
 
   const created = await createSpreadsheet({
     accessToken: input.accessToken,
@@ -378,6 +397,14 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
     sheetName,
     historySheetName
   });
+
+  if (parentFolderId) {
+    await moveDriveFileToFolder({
+      accessToken: input.accessToken,
+      fileId: created.spreadsheetId,
+      folderId: parentFolderId
+    });
+  }
 
   await updateSheetValues({
     accessToken: input.accessToken,
@@ -399,6 +426,107 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
     sheetName,
     historySheetName
   };
+}
+
+async function ensureDriveFolderAccessible(input: {
+  accessToken: string;
+  folderId: string;
+}): Promise<string> {
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(input.folderId)}?fields=id,name,mimeType&supportsAllDrives=true`,
+    {
+      headers: {
+        authorization: `Bearer ${input.accessToken}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`指定した保存先フォルダを確認できませんでした: ${text}`);
+  }
+
+  const data = (await response.json()) as {
+    id?: string;
+    mimeType?: string;
+  };
+
+  if (data.mimeType !== 'application/vnd.google-apps.folder' || !data.id) {
+    throw new Error('指定した URL は Google Drive フォルダではありません。');
+  }
+
+  return data.id;
+}
+
+async function createDriveFolder(input: {
+  accessToken: string;
+  folderName: string;
+}): Promise<string> {
+  const response = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${input.accessToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: input.folderName,
+      mimeType: 'application/vnd.google-apps.folder'
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`保存先フォルダを新規作成できませんでした: ${text}`);
+  }
+
+  const data = (await response.json()) as { id?: string };
+
+  if (!data.id) {
+    throw new Error('保存先フォルダの作成結果にフォルダ ID が含まれていませんでした。');
+  }
+
+  return data.id;
+}
+
+async function moveDriveFileToFolder(input: {
+  accessToken: string;
+  fileId: string;
+  folderId: string;
+}): Promise<void> {
+  const metadataResponse = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(input.fileId)}?fields=parents&supportsAllDrives=true`,
+    {
+      headers: {
+        authorization: `Bearer ${input.accessToken}`
+      }
+    }
+  );
+
+  if (!metadataResponse.ok) {
+    const text = await metadataResponse.text();
+    throw new Error(`作成したスプレッドシートの保存先を確認できませんでした: ${text}`);
+  }
+
+  const metadata = (await metadataResponse.json()) as { parents?: string[] };
+  const removeParents = Array.isArray(metadata.parents) ? metadata.parents.join(',') : '';
+  const updateUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(input.fileId)}`);
+  updateUrl.searchParams.set('supportsAllDrives', 'true');
+  updateUrl.searchParams.set('addParents', input.folderId);
+  if (removeParents) {
+    updateUrl.searchParams.set('removeParents', removeParents);
+  }
+
+  const updateResponse = await fetch(updateUrl.toString(), {
+    method: 'PATCH',
+    headers: {
+      authorization: `Bearer ${input.accessToken}`
+    }
+  });
+
+  if (!updateResponse.ok) {
+    const text = await updateResponse.text();
+    throw new Error(`スプレッドシートを指定フォルダへ移動できませんでした: ${text}`);
+  }
 }
 
 export async function grantSpreadsheetAccessToServiceAccount(input: {

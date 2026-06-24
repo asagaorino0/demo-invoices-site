@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
 
     const payload = JSON.parse(payloadCookie) as {
       spreadsheetTitle?: string;
+      destinationFolderUrlOrId?: string;
+      newFolderName?: string;
       sheetName?: string;
       historySheetName?: string;
     };
@@ -67,6 +69,8 @@ export async function GET(request: NextRequest) {
     const created = await createGoogleSheetTargetWithUserAccessToken({
       accessToken: tokens.accessToken,
       title: String(payload.spreadsheetTitle || ''),
+      destinationFolderId: extractDriveFolderId(String(payload.destinationFolderUrlOrId || '')),
+      newFolderName: String(payload.newFolderName || ''),
       sheetName: String(payload.sheetName || ''),
       historySheetName: String(payload.historySheetName || '')
     });
@@ -105,4 +109,12 @@ export async function GET(request: NextRequest) {
       error instanceof Error ? error.message : 'Google スプレッドシートの作成に失敗しました。'
     );
   }
+}
+
+function extractDriveFolderId(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+  const folderMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch?.[1]) return folderMatch[1];
+  return trimmed;
 }
