@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { listProjectSummaries, getProjectDetail } from '../../lib/store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, getProjectStatusLabel, type ProjectSummary } from '../../types';
-import { CreateProjectPanel } from './create-project-panel';
 import { ProjectEditor } from './[projectId]/project-editor';
 import { loadSiteConfig } from '../../lib/site-config';
 import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 import { SourceSheetDialog } from './source-sheet-dialog';
+import { NewUserDialog } from './new-user-dialog';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,11 +87,11 @@ export default async function ProjectsPage({
         <p>
           利用者ごとの未回収確認、請求対象の選択、明細編集、プレビュー、CSV 書き出しを一つの流れで扱います。
         </p>
-        <div className="hero-actions">
+        {/* <div className="hero-actions">
           <a className="button-link secondary" href="/invoices.html">
             見本画面を開く
           </a>
-        </div>
+        </div> */}
       </section>
 
       {loadError ? (
@@ -122,7 +122,7 @@ export default async function ProjectsPage({
               </div>
             </section>
           ) : null} */}
-          <CreateProjectPanel />
+          <NewUserDialog />
 
           {hasSourceSpreadsheetSetting ? (
             <section className="card">

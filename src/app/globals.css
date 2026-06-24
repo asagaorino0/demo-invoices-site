@@ -413,6 +413,32 @@ a {
   color: var(--accent-strong);
 }
 
+.choice-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.choice-chip {
+  padding: 2px 18px;
+  border: 1px solid #eed4e1;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff8fb, #f8e4ee);
+  color: #b5628a;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.choice-chip.active {
+  border-color: rgba(150, 21, 95, 0.28);
+  background: linear-gradient(180deg, #b81d72, #96155f);
+  color: #fffdfd;
+  /* box-shadow: 0 8px 18px rgba(150, 21, 95, 0.16); */
+}
+
 .service-line-card {
   position: relative;
   display: grid;
