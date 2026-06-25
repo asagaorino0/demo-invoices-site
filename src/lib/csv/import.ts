@@ -29,6 +29,8 @@ interface NormalizedRow {
   invoiceRecipient: string;
   facilityName: string;
   companyName: string;
+  issuerBoxOffsetX: number;
+  issuerBoxOffsetY: number;
   reservationId: string;
   serviceDate: string | null;
   serviceName: string;
@@ -106,6 +108,8 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
         companyName: readString(row.companyName),
         invoiceRecipient: readString(row.invoiceRecipient)
       }),
+      issuerBoxOffsetX: parseNumber(row.issuerBoxOffsetX, 0),
+      issuerBoxOffsetY: parseNumber(row.issuerBoxOffsetY, 0),
       reservationId,
       serviceDate: readDate(row.date),
       serviceName: readString(row.service),
@@ -146,6 +150,8 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
         companyName: row.companyName,
         issueDate: row.issueDate,
         defaultRemarks: row.remarks,
+        issuerBoxOffsetX: row.issuerBoxOffsetX,
+        issuerBoxOffsetY: row.issuerBoxOffsetY,
         status: 'draft',
         createdAt: now,
         updatedAt: now
@@ -163,6 +169,12 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
       }
       if (!project.issueDate && row.issueDate) {
         project.issueDate = row.issueDate;
+      }
+      if (project.issuerBoxOffsetX === 0 && row.issuerBoxOffsetX !== 0) {
+        project.issuerBoxOffsetX = row.issuerBoxOffsetX;
+      }
+      if (project.issuerBoxOffsetY === 0 && row.issuerBoxOffsetY !== 0) {
+        project.issuerBoxOffsetY = row.issuerBoxOffsetY;
       }
       project.updatedAt = now;
     }

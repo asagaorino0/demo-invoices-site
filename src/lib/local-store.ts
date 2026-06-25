@@ -100,6 +100,8 @@ function normalizeProject(value: unknown): Project {
     }),
     issueDate: entry.issueDate ? String(entry.issueDate) : null,
     defaultRemarks: String(entry.defaultRemarks || ''),
+    issuerBoxOffsetX: Number.isFinite(entry.issuerBoxOffsetX) ? Number(entry.issuerBoxOffsetX) : 0,
+    issuerBoxOffsetY: Number.isFinite(entry.issuerBoxOffsetY) ? Number(entry.issuerBoxOffsetY) : 0,
     status:
       entry.status === 'ready_for_export' || entry.status === 'exported' ? entry.status : 'draft',
     createdAt: String(entry.createdAt || ''),

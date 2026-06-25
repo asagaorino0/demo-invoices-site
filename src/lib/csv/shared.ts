@@ -8,6 +8,8 @@ const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   invoicerecipient: 'invoiceRecipient',
   facilityname: 'facilityName',
   companyname: 'companyName',
+  issuerboxoffsetx: 'issuerBoxOffsetX',
+  issuerboxoffsety: 'issuerBoxOffsetY',
   reservationid: 'reservationId',
   date: 'date',
   service: 'service',
@@ -31,6 +33,8 @@ const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   visible: 'visible',
   件名: 'subject',
   請求日タイプ: 'defaultInvoiceDateMode',
+  送り主欄x: 'issuerBoxOffsetX',
+  送り主欄y: 'issuerBoxOffsetY',
   表示: 'visible'
 };
 

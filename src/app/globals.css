@@ -306,6 +306,44 @@ a {
   min-width: 0;
 }
 
+.invoice-preview-controls {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.invoice-preview-subject-control {
+  display: grid;
+  gap: 6px;
+}
+
+.invoice-preview-subject-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  letter-spacing: 0.02em;
+}
+
+.invoice-preview-subject-help {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.invoice-preview-position-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.invoice-preview-position-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.invoice-preview-position-actions .button-link {
+  width: auto;
+}
+
 .workbench-sidebar .card,
 .workbench-main .card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 249, 252, 0.94));
@@ -607,6 +645,7 @@ a {
 
 .invoice-doc {
   width: 794px;
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 40px 46px 34px;
   border-radius: 24px;
@@ -662,11 +701,14 @@ a {
 }
 
 .invoice-doc-company {
+  position: relative;
   min-height: 150px;
   padding: 16px;
   border: 1px dashed #cbc1ca;
   font-size: 12px;
   color: #2f2530;
+  transform-origin: top right;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .invoice-doc-company h3 {
@@ -677,6 +719,18 @@ a {
 .invoice-doc-company p {
   margin: 3px 0 0;
   color: inherit;
+}
+
+.invoice-doc-company.draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.invoice-doc-company.dragging {
+  cursor: grabbing;
+  border-color: rgba(47, 128, 237, 0.45);
+  box-shadow: 0 12px 24px rgba(47, 128, 237, 0.12);
 }
 
 .invoice-chip-row {
@@ -818,6 +872,58 @@ a {
   font-size: 11px;
   color: #4d3c49;
   white-space: pre-wrap;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  .invoice-doc-wrap {
+    overflow: visible;
+  }
+
+  .invoice-doc {
+    width: 190mm;
+    min-width: 0;
+    margin: 0 auto;
+    padding: 10mm 11mm 8mm;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .invoice-doc-header {
+    grid-template-columns: 1.05fr 0.95fr !important;
+    gap: 22px;
+    align-items: start;
+  }
+
+  .invoice-doc-company {
+    min-height: 0;
+    border: 0;
+  }
+
+  .invoice-table,
+  .invoice-table thead,
+  .invoice-table tbody,
+  .invoice-table tfoot,
+  .invoice-table tr,
+  .invoice-notes,
+  .invoice-footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
 
 @media (max-width: 900px) {

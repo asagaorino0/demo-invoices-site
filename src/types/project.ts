@@ -39,6 +39,8 @@ export interface Project {
   companyName: string;
   issueDate: string | null;
   defaultRemarks: string;
+  issuerBoxOffsetX: number;
+  issuerBoxOffsetY: number;
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;

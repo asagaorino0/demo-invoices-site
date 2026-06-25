@@ -47,6 +47,8 @@ export async function PATCH(
       companyName?: string;
       issueDate?: string | null;
       defaultRemarks?: string;
+      issuerBoxOffsetX?: number;
+      issuerBoxOffsetY?: number;
       status?: 'draft' | 'ready_for_export' | 'exported';
     };
 
@@ -63,6 +65,8 @@ export async function PATCH(
       }),
       issueDate: body.issueDate || null,
       defaultRemarks: String(body.defaultRemarks || '').trim(),
+      issuerBoxOffsetX: Number(body.issuerBoxOffsetX || 0),
+      issuerBoxOffsetY: Number(body.issuerBoxOffsetY || 0),
       status: body.status || 'draft'
     });
 

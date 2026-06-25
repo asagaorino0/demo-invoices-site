@@ -15,6 +15,8 @@ export function buildProjectPlaceholderRow(project: Project): InvoiceCsvRow {
     invoiceRecipient: project.invoiceRecipient,
     facilityName: project.facilityName,
     companyName: project.companyName,
+    issuerBoxOffsetX: String(project.issuerBoxOffsetX || 0),
+    issuerBoxOffsetY: String(project.issuerBoxOffsetY || 0),
     reservationId: buildProjectPlaceholderReservationId(project),
     date: '',
     service: '案件作成',

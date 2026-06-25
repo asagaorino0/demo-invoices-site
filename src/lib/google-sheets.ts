@@ -107,6 +107,8 @@ const HISTORY_FIELD_LABELS: Partial<Record<keyof InvoiceCsvRow | 'reservationId'
   invoiceRecipient: '請求先',
   facilityName: '施設名',
   companyName: '会社名',
+  issuerBoxOffsetX: '送り主欄X',
+  issuerBoxOffsetY: '送り主欄Y',
   reservationId: '明細',
   date: 'サービス日',
   service: 'サービス名',
@@ -152,10 +154,27 @@ export async function syncProjectToGoogleSheet(
   const existingDataRows = existingValues
     .slice(1)
     .filter((row) => String(row[userIdIndex] || '').trim() !== input.project.customerId);
+  const selectedReservationIds = new Set(
+    input.invoiceSelections
+      .filter((selection) => selection.selectedForInvoice)
+      .map((selection) => input.serviceLines.find((line) => line.id === selection.lineId)?.reservationId || '')
+      .filter(Boolean)
+  );
+  const currentCustomerRowMap = buildReservationRowMap(headerKeys, currentCustomerRows);
   const exportedRows = exportInvoiceCsvRows({
     projects: [input.project],
     serviceLines: input.serviceLines,
     invoiceSelections: input.invoiceSelections
+  }).map((row) => {
+    if (selectedReservationIds.has(row.reservationId)) {
+      return row;
+    }
+
+    const existingRow = currentCustomerRowMap.get(row.reservationId);
+    return {
+      ...row,
+      subject: existingRow?.subject || row.subject
+    };
   });
   const historyRecords = buildHistoryRecords({
     config,
@@ -889,7 +908,7 @@ function buildHeaderLabels(values: string[]): string[] {
   const headerLabels = values.map((value) => String(value || '').trim());
   const headerKeys = headerLabels.map((value) => normalizeHeader(value));
   const missingHeaders = INVOICE_CSV_HEADERS.filter((header) => !headerKeys.includes(header));
-  const optionalHeaders = new Set<keyof InvoiceCsvRow>(['subject']);
+  const optionalHeaders = new Set<keyof InvoiceCsvRow>(['subject', 'issuerBoxOffsetX', 'issuerBoxOffsetY']);
   const requiredMissingHeaders = missingHeaders.filter((header) => !optionalHeaders.has(header));
 
   if (requiredMissingHeaders.length > 0) {

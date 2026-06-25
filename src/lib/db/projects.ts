@@ -63,6 +63,8 @@ export interface UpdateProjectHeaderInput {
   companyName: string;
   issueDate: string | null;
   defaultRemarks: string;
+  issuerBoxOffsetX: number;
+  issuerBoxOffsetY: number;
   status: Project['status'];
 }
 
@@ -100,6 +102,8 @@ export interface CreateProjectInput {
   companyName: string;
   issueDate: string | null;
   defaultRemarks: string;
+  issuerBoxOffsetX: number;
+  issuerBoxOffsetY: number;
 }
 
 export interface CreateServiceLineInput {
@@ -200,16 +204,18 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
           input.importId,
           project.customerId,
           project.customerName,
-          project.subject,
-          project.defaultInvoiceDateMode,
-          project.invoiceRecipient,
-          project.facilityName,
-          project.companyName,
-          project.issueDate || '',
-          project.defaultRemarks,
-          project.status,
-          project.createdAt,
-          project.updatedAt
+      project.subject,
+      project.defaultInvoiceDateMode,
+      project.invoiceRecipient,
+      project.facilityName,
+      project.companyName,
+      project.issueDate || '',
+      project.defaultRemarks,
+      project.issuerBoxOffsetX,
+      project.issuerBoxOffsetY,
+      project.status,
+      project.createdAt,
+      project.updatedAt
         ]);
       }
 
@@ -391,6 +397,8 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
       input.companyName,
       input.issueDate || '',
       input.defaultRemarks,
+      input.issuerBoxOffsetX,
+      input.issuerBoxOffsetY,
       input.status,
       now
     ]);
@@ -412,6 +420,8 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
       companyName: input.companyName,
       issueDate: input.issueDate,
       defaultRemarks: input.defaultRemarks,
+      issuerBoxOffsetX: input.issuerBoxOffsetX,
+      issuerBoxOffsetY: input.issuerBoxOffsetY,
       status: input.status,
       updatedAt: now
     };
@@ -655,6 +665,8 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       input.companyName,
       input.issueDate || '',
       input.defaultRemarks,
+      input.issuerBoxOffsetX,
+      input.issuerBoxOffsetY,
       'draft',
       now,
       now
@@ -675,6 +687,8 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       companyName: input.companyName,
       issueDate: input.issueDate,
       defaultRemarks: input.defaultRemarks,
+      issuerBoxOffsetX: input.issuerBoxOffsetX,
+      issuerBoxOffsetY: input.issuerBoxOffsetY,
       status: 'draft',
       createdAt: now,
       updatedAt: now

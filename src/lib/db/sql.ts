@@ -38,6 +38,8 @@ export const projectDetailSql = `
     p.company_name as "companyName",
     to_char(p.issue_date, 'YYYY-MM-DD') as "issueDate",
     p.default_remarks as "defaultRemarks",
+    p.issuer_box_offset_x as "issuerBoxOffsetX",
+    p.issuer_box_offset_y as "issuerBoxOffsetY",
     p.status,
     p.created_at as "createdAt",
     p.updated_at as "updatedAt"
@@ -108,11 +110,13 @@ export const upsertProjectSql = `
     company_name,
     issue_date,
     default_remarks,
+    issuer_box_offset_x,
+    issuer_box_offset_y,
     status,
     created_at,
     updated_at
   ) values (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, '')::date, $11, $12, $13::timestamptz, $14::timestamptz
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, '')::date, $11, $12, $13, $14, $15::timestamptz, $16::timestamptz
   )
   on conflict (id) do update set
     import_id = excluded.import_id,
@@ -125,6 +129,8 @@ export const upsertProjectSql = `
     company_name = excluded.company_name,
     issue_date = excluded.issue_date,
     default_remarks = excluded.default_remarks,
+    issuer_box_offset_x = excluded.issuer_box_offset_x,
+    issuer_box_offset_y = excluded.issuer_box_offset_y,
     status = excluded.status,
     updated_at = excluded.updated_at
 `;
@@ -203,8 +209,10 @@ export const updateProjectHeaderSql = `
     company_name = $7,
     issue_date = nullif($8, '')::date,
     default_remarks = $9,
-    status = $10,
-    updated_at = $11::timestamptz
+    issuer_box_offset_x = $10,
+    issuer_box_offset_y = $11,
+    status = $12,
+    updated_at = $13::timestamptz
   where id = $1
   returning
     id,
@@ -218,6 +226,8 @@ export const updateProjectHeaderSql = `
     company_name as "companyName",
     to_char(issue_date, 'YYYY-MM-DD') as "issueDate",
     default_remarks as "defaultRemarks",
+    issuer_box_offset_x as "issuerBoxOffsetX",
+    issuer_box_offset_y as "issuerBoxOffsetY",
     status,
     created_at as "createdAt",
     updated_at as "updatedAt"
@@ -299,11 +309,13 @@ export const insertProjectSql = `
     company_name,
     issue_date,
     default_remarks,
+    issuer_box_offset_x,
+    issuer_box_offset_y,
     status,
     created_at,
     updated_at
   ) values (
-    $1, null, $2, $3, $4, $5, $6, $7, $8, nullif($9, '')::date, $10, $11, $12::timestamptz, $13::timestamptz
+    $1, null, $2, $3, $4, $5, $6, $7, $8, nullif($9, '')::date, $10, $11, $12, $13, $14::timestamptz, $15::timestamptz
   )
   returning
     id,
@@ -317,6 +329,8 @@ export const insertProjectSql = `
     company_name as "companyName",
     to_char(issue_date, 'YYYY-MM-DD') as "issueDate",
     default_remarks as "defaultRemarks",
+    issuer_box_offset_x as "issuerBoxOffsetX",
+    issuer_box_offset_y as "issuerBoxOffsetY",
     status,
     created_at as "createdAt",
     updated_at as "updatedAt"

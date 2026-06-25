@@ -36,6 +36,8 @@ export async function POST(request: Request): Promise<Response> {
       companyName?: string;
       issueDate?: string | null;
       defaultRemarks?: string;
+      issuerBoxOffsetX?: number;
+      issuerBoxOffsetY?: number;
     };
 
     const input = {
@@ -50,7 +52,9 @@ export async function POST(request: Request): Promise<Response> {
         invoiceRecipient: String(body.invoiceRecipient || '').trim()
       }),
       issueDate: body.issueDate || null,
-      defaultRemarks: String(body.defaultRemarks || '').trim()
+      defaultRemarks: String(body.defaultRemarks || '').trim(),
+      issuerBoxOffsetX: Number(body.issuerBoxOffsetX || 0),
+      issuerBoxOffsetY: Number(body.issuerBoxOffsetY || 0)
     };
     const validation = validateProjectInput(input);
     if (!validation.ok) {

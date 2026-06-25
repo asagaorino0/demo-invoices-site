@@ -164,6 +164,8 @@ export function ProjectEditor({
     companyName: project.companyName,
     issueDate: project.issueDate || '',
     defaultRemarks: project.defaultRemarks,
+    issuerBoxOffsetX: project.issuerBoxOffsetX || 0,
+    issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
     status: project.status
   });
   const [savedHeader, setSavedHeader] = useState({
@@ -175,6 +177,8 @@ export function ProjectEditor({
     companyName: project.companyName,
     issueDate: project.issueDate || '',
     defaultRemarks: project.defaultRemarks,
+    issuerBoxOffsetX: project.issuerBoxOffsetX || 0,
+    issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
     status: project.status
   });
   const [sheetSyncStatus, setSheetSyncStatus] = useState(project.status);
@@ -234,6 +238,8 @@ export function ProjectEditor({
     form.companyName !== savedHeader.companyName ||
     form.issueDate !== savedHeader.issueDate ||
     form.defaultRemarks !== savedHeader.defaultRemarks ||
+    form.issuerBoxOffsetX !== savedHeader.issuerBoxOffsetX ||
+    form.issuerBoxOffsetY !== savedHeader.issuerBoxOffsetY ||
     form.status !== savedHeader.status;
   const isLineDirty =
     !!editingLine &&
@@ -323,6 +329,8 @@ export function ProjectEditor({
       companyName: form.companyName,
       issueDate: form.issueDate || null,
       defaultRemarks: form.defaultRemarks,
+      issuerBoxOffsetX: form.issuerBoxOffsetX,
+      issuerBoxOffsetY: form.issuerBoxOffsetY,
       status: form.status
     }),
     [form, project]
@@ -406,6 +414,8 @@ export function ProjectEditor({
       companyName: project.companyName,
       issueDate: project.issueDate || '',
       defaultRemarks: project.defaultRemarks,
+      issuerBoxOffsetX: project.issuerBoxOffsetX || 0,
+      issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
       status: project.status
     };
     setForm(nextHeader);
@@ -590,6 +600,8 @@ export function ProjectEditor({
       companyName: form.companyName,
       issueDate: form.defaultInvoiceDateMode === 'custom' ? form.issueDate : resolvedIssueDate,
       defaultRemarks: form.defaultRemarks,
+      issuerBoxOffsetX: form.issuerBoxOffsetX,
+      issuerBoxOffsetY: form.issuerBoxOffsetY,
       status: form.status
     });
     setSheetSyncStatus(form.status);
@@ -1146,16 +1158,19 @@ export function ProjectEditor({
     return true;
   }
 
-  function openPrintWindow(kind: 'invoice' | 'receipt') {
+  async function openPrintWindow(kind: 'invoice' | 'receipt') {
+    if (kind === 'invoice' && isHeaderDirty) {
+      const synced = await syncProjectToSheet({
+        successMessage: '件名を Google Sheets に保存しました。'
+      });
+      if (!synced) {
+        return;
+      }
+    }
+
     const target = kind === 'invoice' ? invoicePrintRef.current : receiptPrintRef.current;
     if (!target) {
       setError('印刷対象を表示できませんでした。');
-      return;
-    }
-
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1100,height=900');
-    if (!printWindow) {
-      setError('印刷ウィンドウを開けませんでした。');
       return;
     }
 
@@ -1163,9 +1178,28 @@ export function ProjectEditor({
       .map((element) => element.outerHTML)
       .join('\n');
     const title = kind === 'invoice' ? '請求書' : '領収書';
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    document.body.appendChild(iframe);
 
-    printWindow.document.open();
-    printWindow.document.write(`
+    const iframeWindow = iframe.contentWindow;
+    if (!iframeWindow) {
+      iframe.remove();
+      setError('印刷ウィンドウを準備できませんでした。');
+      return;
+    }
+
+    const printDocument = iframeWindow.document;
+
+    printDocument.open();
+    printDocument.write(`
       <!DOCTYPE html>
       <html lang="ja">
         <head>
@@ -1179,15 +1213,31 @@ export function ProjectEditor({
           </style>
         </head>
         <body>
-          <div class="print-shell">${target.innerHTML}</div>
+          <div class="print-shell"></div>
         </body>
       </html>
     `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.onload = () => {
-      printWindow.print();
-    };
+    printDocument.close();
+
+    const printShell = printDocument.querySelector('.print-shell');
+    if (!printShell) {
+      setError('印刷内容の組み立てに失敗しました。');
+      iframe.remove();
+      return;
+    }
+
+    printShell.appendChild(printDocument.importNode(target, true));
+    iframeWindow.focus();
+    iframeWindow.addEventListener(
+      'afterprint',
+      () => {
+        iframe.remove();
+      },
+      { once: true }
+    );
+    window.setTimeout(() => {
+      iframeWindow.print();
+    }, 250);
   }
 
   function renderUncollectedPanel(options?: { compact?: boolean; showDebug?: boolean }) {
@@ -1684,6 +1734,45 @@ export function ProjectEditor({
                       印刷 / PDF
                     </button>
                   </div>
+                  {invoiceLines.length > 0 ? (
+                    <div className="invoice-preview-controls">
+                      <label className="invoice-preview-subject-control">
+                        <span className="invoice-preview-subject-label">件名</span>
+                        <input
+                          value={form.subject}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, subject: event.target.value }))
+                          }
+                          placeholder="請求書に表示する件名"
+                          style={inputStyle}
+                        />
+                        <span className="invoice-preview-subject-help">
+                          プレビュー、印刷 / PDF、スプレッドシート保存に反映されます。
+                        </span>
+                      </label>
+                      <div className="invoice-preview-position-tools">
+                        <span className="invoice-preview-subject-label">送り主欄の位置</span>
+                        <div className="invoice-preview-position-actions">
+                          <button
+                            className="button-link secondary"
+                            type="button"
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                issuerBoxOffsetX: 0,
+                                issuerBoxOffsetY: 0
+                              }))
+                            }
+                          >
+                            位置をリセット
+                          </button>
+                        </div>
+                        <span className="invoice-preview-subject-help">
+                          送り主欄をドラッグすると位置を調整できます。印刷 / PDF にも反映されます。
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
                   {invoiceLines.length === 0 ? (
                     <p>請求対象の未回収明細を選ぶと、ここに請求書が表示されます。</p>
                   ) : (
@@ -1693,6 +1782,14 @@ export function ProjectEditor({
                         project={previewProject}
                         lines={invoiceLines}
                         kind="invoice"
+                        allowIssuerReposition
+                        onIssuerPositionChange={(position) =>
+                          setForm((current) => ({
+                            ...current,
+                            issuerBoxOffsetX: position.x,
+                            issuerBoxOffsetY: position.y
+                          }))
+                        }
                       />
                     </div>
                   )}

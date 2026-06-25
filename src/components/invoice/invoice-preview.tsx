@@ -1,3 +1,7 @@
+'use client';
+
+import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState } from 'react';
 import type { Project, ServiceLine, SiteConfig } from '../../types';
 import {
   buildDocumentRows,
@@ -16,9 +20,25 @@ interface InvoicePreviewProps {
   project: Project;
   lines: ServiceLine[];
   kind: 'invoice' | 'receipt';
+  allowIssuerReposition?: boolean;
+  onIssuerPositionChange?: (position: { x: number; y: number }) => void;
 }
 
-export function InvoicePreview({ config, project, lines, kind }: InvoicePreviewProps) {
+const ISSUER_OFFSET_X_RANGE = { min: -220, max: 220 };
+const ISSUER_OFFSET_Y_RANGE = { min: -80, max: 220 };
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function InvoicePreview({
+  config,
+  project,
+  lines,
+  kind,
+  allowIssuerReposition = false,
+  onIssuerPositionChange
+}: InvoicePreviewProps) {
   const totals = calcTotals(lines, config);
   const rows = buildDocumentRows(lines);
   const isReceipt = kind === 'receipt';
@@ -28,6 +48,18 @@ export function InvoicePreview({ config, project, lines, kind }: InvoicePreviewP
   const issueDate = isReceipt ? getReceiptIssueDate(project, lines) : getInvoiceIssueDate(project, lines);
   const message = isReceipt ? '下記のとおり領収いたしました。' : '下記のとおりご請求申し上げます。';
   const amountLabel = isReceipt ? '受領金額' : 'ご請求金額';
+  const issuerPosition = {
+    x: Math.round(project.issuerBoxOffsetX || 0),
+    y: Math.round(project.issuerBoxOffsetY || 0)
+  };
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startOffsetX: number;
+    startOffsetY: number;
+  } | null>(null);
+  const [isDraggingIssuer, setIsDraggingIssuer] = useState(false);
   const remarksText = [
     project.defaultRemarks,
     ...lines.map((line) => line.remarks)
@@ -36,6 +68,57 @@ export function InvoicePreview({ config, project, lines, kind }: InvoicePreviewP
     .filter(Boolean)
     .filter((text, index, array) => array.indexOf(text) === index)
     .join('\n');
+
+  function handleIssuerPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowIssuerReposition || !onIssuerPositionChange || event.button !== 0) {
+      return;
+    }
+
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startOffsetX: issuerPosition.x,
+      startOffsetY: issuerPosition.y
+    };
+    setIsDraggingIssuer(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function handleIssuerPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowIssuerReposition || !onIssuerPositionChange) {
+      return;
+    }
+
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const nextX = clamp(
+      dragState.startOffsetX + (event.clientX - dragState.startClientX),
+      ISSUER_OFFSET_X_RANGE.min,
+      ISSUER_OFFSET_X_RANGE.max
+    );
+    const nextY = clamp(
+      dragState.startOffsetY + (event.clientY - dragState.startClientY),
+      ISSUER_OFFSET_Y_RANGE.min,
+      ISSUER_OFFSET_Y_RANGE.max
+    );
+    onIssuerPositionChange({
+      x: Math.round(nextX),
+      y: Math.round(nextY)
+    });
+  }
+
+  function finishIssuerDrag(event?: ReactPointerEvent<HTMLDivElement>) {
+    if (event && dragStateRef.current?.pointerId === event.pointerId) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragStateRef.current = null;
+    setIsDraggingIssuer(false);
+  }
 
   return (
     <div className="invoice-doc-wrap">
@@ -62,7 +145,16 @@ export function InvoicePreview({ config, project, lines, kind }: InvoicePreviewP
             </div>
           </div>
 
-          <div className="invoice-doc-company">
+          <div
+            className={`invoice-doc-company${allowIssuerReposition ? ' draggable' : ''}${isDraggingIssuer ? ' dragging' : ''}`}
+            style={{
+              transform: `translate(${issuerPosition.x}px, ${issuerPosition.y}px)`
+            }}
+            onPointerDown={handleIssuerPointerDown}
+            onPointerMove={handleIssuerPointerMove}
+            onPointerUp={finishIssuerDrag}
+            onPointerCancel={finishIssuerDrag}
+          >
             <h3>{config.issuerName}</h3>
             <p>〒{config.issuerPostalCode || ''}</p>
             <p>{config.issuerAddress || ''}</p>
