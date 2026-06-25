@@ -354,6 +354,10 @@ a {
   box-shadow: var(--shadow);
 }
 
+.dialog-card-wide {
+  width: min(760px, 100%);
+}
+
 .dialog-header {
   display: flex;
   align-items: flex-start;
@@ -481,7 +485,7 @@ a {
 }
 
 .month-chip {
-  padding: 14px 22px;
+  padding: 4px 22px;
   border: 1px solid #eed4e1;
   border-radius: 999px;
   background: #fffdfd;

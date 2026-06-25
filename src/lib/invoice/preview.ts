@@ -91,7 +91,7 @@ export function buildDocumentRows(lines: ServiceLine[]): InvoicePreviewRow[] {
 export function getInvoiceLines(lines: ServiceLine[], selectedLineIds: string[]): ServiceLine[] {
   const lineMap = new Map(
     lines
-      .filter((line) => line.collectionStatus === 'uncollected')
+      .filter((line) => line.collectionStatus === 'uncollected' && line.visible)
       .map((line) => [line.id, line])
   );
   return selectedLineIds

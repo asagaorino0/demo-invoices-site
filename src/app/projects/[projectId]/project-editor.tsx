@@ -197,9 +197,14 @@ export function ProjectEditor({
   const [editingLineId, setEditingLineId] = useState<string>(
     serviceLines.length === 1 ? serviceLines[0]?.id || '' : ''
   );
+  const [lineEditorDialogOpen, setLineEditorDialogOpen] = useState(false);
+  const [editingLineOverride, setEditingLineOverride] = useState<ServiceLine | null>(null);
   const editingLine = useMemo(
-    () => serviceLines.find((line) => line.id === editingLineId) || (serviceLines.length === 1 ? serviceLines[0] || null : null),
-    [editingLineId, serviceLines]
+    () =>
+      serviceLines.find((line) => line.id === editingLineId) ||
+      (editingLineOverride?.id === editingLineId ? editingLineOverride : null) ||
+      (serviceLines.length === 1 ? serviceLines[0] || null : null),
+    [editingLineId, editingLineOverride, serviceLines]
   );
   const [lineForm, setLineForm] = useState(() =>
     editingLine
@@ -414,13 +419,33 @@ export function ProjectEditor({
   }, [resolvedReceiptDate]);
 
   useEffect(() => {
+    const currentEditingLine = editingLineId
+      ? serviceLines.find((line) => line.id === editingLineId) || null
+      : null;
+
     if (editableLines.length === 0) {
+      if ((editingLineOverride && lineForm) || (lineEditorDialogOpen && currentEditingLine)) {
+        return;
+      }
       setEditingLineId('');
       setLineForm(null);
+      setLineEditorDialogOpen(false);
+      setEditingLineOverride(null);
       return;
     }
 
     if (editingLineId && editableLines.some((line) => line.id === editingLineId)) {
+      return;
+    }
+
+    if (lineEditorDialogOpen && currentEditingLine) {
+      if (!lineForm) {
+        syncLineForm(currentEditingLine.id);
+      }
+      return;
+    }
+
+    if (editingLineOverride?.id === editingLineId && lineForm) {
       return;
     }
 
@@ -431,7 +456,13 @@ export function ProjectEditor({
 
     setEditingLineId('');
     setLineForm(null);
-  }, [activeTab, editableLines, editingLineId]);
+  }, [activeTab, editableLines, editingLineId, editingLineOverride, lineEditorDialogOpen, lineForm, serviceLines]);
+
+  useEffect(() => {
+    if (editingLineOverride && serviceLines.some((line) => line.id === editingLineOverride.id)) {
+      setEditingLineOverride(null);
+    }
+  }, [editingLineOverride, serviceLines]);
 
   useEffect(() => {
     const serviceLineIds = new Set(serviceLines.map((line) => line.id));
@@ -496,6 +527,7 @@ export function ProjectEditor({
 
   function syncLineForm(lineId: string) {
     const line = serviceLines.find((item) => item.id === lineId);
+    setEditingLineOverride(null);
     setEditingLineId(lineId);
     setLineForm(
       line
@@ -516,6 +548,11 @@ export function ProjectEditor({
         }
         : null
     );
+  }
+
+  function openLineEditorDialog(lineId: string) {
+    syncLineForm(lineId);
+    setLineEditorDialogOpen(true);
   }
 
   function formatEditingLineLabel(line: ServiceLine): string {
@@ -651,26 +688,26 @@ export function ProjectEditor({
     }
   }
 
-  async function saveLine() {
-    if (!editingLine || !lineForm) return;
+  async function saveLine(): Promise<boolean> {
+    if (!editingLine || !lineForm) return false;
     setMessage('');
     setError('');
 
     if (!lineForm.serviceName.trim()) {
       setError('サービス名を入力してください。');
-      return;
+      return false;
     }
     if (Number(lineForm.price || 0) < 0) {
       setError('単価は 0 以上で入力してください。');
-      return;
+      return false;
     }
     if (Number(lineForm.quantity || 0) <= 0) {
       setError('数量は 0 より大きい値を入力してください。');
-      return;
+      return false;
     }
     if (!lineForm.unit.trim()) {
       setError('単位を入力してください。');
-      return;
+      return false;
     }
 
     const response = await fetch(`/api/projects/${project.id}/lines/${editingLine.id}`, {
@@ -697,7 +734,7 @@ export function ProjectEditor({
     const data = (await response.json()) as { message?: string };
     if (!response.ok) {
       setError(data.message || '明細を保存できませんでした。');
-      return;
+      return false;
     }
     const synced = await syncProjectToSheet({
       successMessage: 'プレビューに反映し、Google Sheets に保存しました。',
@@ -706,11 +743,13 @@ export function ProjectEditor({
     if (!synced) {
       setShowSheetSyncReminder(true);
       startTransition(() => router.refresh());
+      return false;
     }
+    return true;
   }
 
-  async function duplicateCurrentLine() {
-    if (!editingLine) return;
+  async function duplicateCurrentLine(): Promise<boolean> {
+    if (!editingLine) return false;
     setMessage('');
     setError('');
 
@@ -720,7 +759,7 @@ export function ProjectEditor({
     const data = (await response.json()) as { message?: string };
     if (!response.ok) {
       setError(data.message || '明細を複製できませんでした。');
-      return;
+      return false;
     }
     const synced = await syncProjectToSheet({
       successMessage: '明細を複製し、Google Sheets に保存しました。',
@@ -729,7 +768,9 @@ export function ProjectEditor({
     if (!synced) {
       setShowSheetSyncReminder(true);
       startTransition(() => router.refresh());
+      return false;
     }
+    return true;
   }
 
   async function deleteCurrentLine() {
@@ -1045,7 +1086,7 @@ export function ProjectEditor({
     window.addEventListener('pointercancel', handlePointerUp, { once: true });
   }
 
-  async function createNewLine() {
+  async function createNewLine(options?: { openEditor?: boolean }): Promise<boolean> {
     setMessage('');
     setError('');
     const today = new Date().toISOString().slice(0, 10);
@@ -1066,10 +1107,32 @@ export function ProjectEditor({
         collectionStatus: 'uncollected'
       })
     });
-    const data = (await response.json()) as { message?: string };
-    if (!response.ok) {
+    const data = (await response.json()) as { message?: string; line?: ServiceLine };
+    if (!response.ok || !data.line?.id) {
       setError(data.message || '明細を追加できませんでした。');
-      return;
+      return false;
+    }
+    const nextLine = data.line;
+    const nextLineId = nextLine.id;
+    setEditingLineOverride(nextLine);
+    setEditingLineId(nextLineId);
+    setLineForm({
+      serviceDate: nextLine.serviceDate || '',
+      serviceName: nextLine.serviceName,
+      staffName: nextLine.staffName,
+      price: String(nextLine.price),
+      quantity: String(nextLine.quantity),
+      unit: nextLine.unit,
+      taxIncluded: nextLine.taxIncluded,
+      remarks: nextLine.remarks,
+      memo: nextLine.memo,
+      visible: nextLine.visible,
+      collectionStatus: nextLine.collectionStatus,
+      collectedAt: nextLine.collectedAt || '',
+      receiptIssuedAt: nextLine.receiptIssuedAt || ''
+    });
+    if (options?.openEditor) {
+      setLineEditorDialogOpen(true);
     }
     const synced = await syncProjectToSheet({
       successMessage: '明細を追加し、Google Sheets に保存しました。',
@@ -1078,7 +1141,9 @@ export function ProjectEditor({
     if (!synced) {
       setShowSheetSyncReminder(true);
       startTransition(() => router.refresh());
+      return false;
     }
+    return true;
   }
 
   function openPrintWindow(kind: 'invoice' | 'receipt') {
@@ -1134,43 +1199,58 @@ export function ProjectEditor({
         <div
           style={{
             display: 'flex',
+            justifyContent: 'space-between',
             gap: 12,
-            alignItems: 'center',
-            flexWrap: 'wrap',
+            alignItems: 'flex-start',
             marginBottom: 18
           }}
         >
-          <div style={{ fontSize: compact ? 16 : 18, fontWeight: 600 }}>選択した項目 {filteredSelectedLineIds.length}件</div>
-          {monthGroups.map(([monthKey, lines]) => {
-            const allSelected = lines.every((line) => filteredSelectedLineIds.includes(line.id));
-            return (
+          <div style={{ display: 'grid', gap: 12, flex: '1 1 auto' }}>
+            <div style={{ fontSize: compact ? 16 : 18, fontWeight: 600 }}>
+              選択した項目 {filteredSelectedLineIds.length}件
+            </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {monthGroups.map(([monthKey, lines]) => {
+                const allSelected = lines.every((line) => filteredSelectedLineIds.includes(line.id));
+                return (
+                  <button
+                    key={monthKey}
+                    className={`month-chip${allSelected ? ' active' : ''}`}
+                    type="button"
+                    onClick={() => toggleMonthSelection(monthKey)}
+                  >
+                    {monthKey}
+                  </button>
+                );
+              })}
               <button
-                key={monthKey}
-                className={`month-chip${allSelected ? ' active' : ''}`}
+                className="month-chip action"
                 type="button"
-                onClick={() => toggleMonthSelection(monthKey)}
+                onClick={() =>
+                  setSelectedLineIds((current) =>
+                    appendIdsPreservingCurrentOrder(
+                      current.filter((id) => displayOrderIds.includes(id)),
+                      uncollectedLines.map((line) => line.id),
+                      displayOrderIds
+                    )
+                  )
+                }
               >
-                {monthKey}
+                全て選択
               </button>
-            );
-          })}
+              <button className="month-chip action" type="button" onClick={() => setSelectedLineIds([])}>
+                選択解除
+              </button>
+            </div>
+          </div>
           <button
-            className="month-chip action"
+            className="button-link primary"
             type="button"
-            onClick={() =>
-              setSelectedLineIds((current) =>
-                appendIdsPreservingCurrentOrder(
-                  current.filter((id) => displayOrderIds.includes(id)),
-                  uncollectedLines.map((line) => line.id),
-                  displayOrderIds
-                )
-              )
-            }
+            onClick={() => void createNewLine({ openEditor: true })}
+            aria-label="明細を追加"
+            style={{ minWidth: compact ? 52 : 56, paddingInline: 0 }}
           >
-            全て選択
-          </button>
-          <button className="month-chip action" type="button" onClick={() => setSelectedLineIds([])}>
-            選択解除
+            ＋
           </button>
         </div>
 
@@ -1294,35 +1374,256 @@ export function ProjectEditor({
                     >
                       回収済にする
                     </button>
+                    <button
+                      className="service-line-action"
+                      type="button"
+                      onClick={() => openLineEditorDialog(line.id)}
+                    >
+                      編集する
+                    </button>
                   </div>
                 </div>
               );
             })
           )}
         </div>
-
-        <div className="hero-actions" style={{ marginTop: 18 }}>
-          {/* <button
-            className="button-link primary"
-            type="button"
-            onClick={() => void saveSelections()}
-            disabled={selectionSavePending}
-          >
-            {selectionSavePending ? '選択を保存中...' : '選択を保存'}
-          </button> */}
-
-          <div className="hero-actions" style={{ marginTop: 18 }}>
-            <button className="button-link primary" type="button" onClick={() => void createNewLine()}>
-              明細を追加
-            </button>
-          </div>
-        </div>
-
         {showDebug ? (
           <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
             drag debug: {dragDebug.phase} / source: {dragDebug.sourceLineId || '-'} / target: {dragDebug.targetLineId || '-'}{dragDebug.placement ? ` (${dragDebug.placement})` : ''}
           </div>
         ) : null}
+      </>
+    );
+  }
+
+  function renderLineEditorContent(withinDialog = false) {
+    if (editableLines.length === 0 && !lineForm) {
+      return (
+        <>
+          <p>編集できる明細がありません。</p>
+          <div className="hero-actions" style={{ marginTop: 18 }}>
+            <button className="button-link primary" type="button" onClick={() => void createNewLine({ openEditor: true })}>
+              明細を追加
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {withinDialog ? null : (
+          <label>
+            <div>対象明細</div>
+            <select
+              value={editingLineId}
+              onChange={(event) => syncLineForm(event.target.value)}
+              style={inputStyle}
+            >
+              {editableLines.length > 1 ? <option value="">選択してください</option> : null}
+              {editableLines.map((line) => (
+                <option key={line.id} value={line.id}>
+                  {formatEditingLineLabel(line)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!lineForm ? (
+          <>
+            <p style={{ marginTop: 12 }}>対象明細を選択してください。</p>
+            <div className="hero-actions" style={{ marginTop: 18 }}>
+              <button className="button-link primary" type="button" onClick={() => void createNewLine({ openEditor: true })}>
+                明細を追加
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+              <label>
+                <div>サービス日</div>
+                <input
+                  type="date"
+                  value={lineForm.serviceDate}
+                  onChange={(event) => setLineForm((current) => current && ({ ...current, serviceDate: event.target.value }))}
+                  style={inputStyle}
+                />
+              </label>
+              <label>
+                <div>サービス名</div>
+                <input
+                  value={lineForm.serviceName}
+                  onChange={(event) => setLineForm((current) => current && ({ ...current, serviceName: event.target.value }))}
+                  style={inputStyle}
+                />
+              </label>
+              <label>
+                <div>担当</div>
+                <input
+                  value={lineForm.staffName}
+                  onChange={(event) => setLineForm((current) => current && ({ ...current, staffName: event.target.value }))}
+                  style={inputStyle}
+                />
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <label>
+                  <div>単価</div>
+                  <input
+                    type="number"
+                    value={lineForm.price}
+                    onChange={(event) => setLineForm((current) => current && ({ ...current, price: event.target.value }))}
+                    style={inputStyle}
+                  />
+                </label>
+                <label>
+                  <div>数量</div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={lineForm.quantity}
+                    onChange={(event) => setLineForm((current) => current && ({ ...current, quantity: event.target.value }))}
+                    style={inputStyle}
+                  />
+                </label>
+                <label>
+                  <div>単位</div>
+                  <input
+                    value={lineForm.unit}
+                    onChange={(event) => setLineForm((current) => current && ({ ...current, unit: event.target.value }))}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <label>
+                <div>備考</div>
+                <input
+                  value={lineForm.remarks}
+                  onChange={(event) => setLineForm((current) => current && ({ ...current, remarks: event.target.value }))}
+                  style={inputStyle}
+                />
+              </label>
+              <label>
+                <div>メモ</div>
+                <textarea
+                  value={lineForm.memo}
+                  onChange={(event) => setLineForm((current) => current && ({ ...current, memo: event.target.value }))}
+                  style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }}
+                />
+              </label>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={lineForm.taxIncluded}
+                  onChange={(event) => setLineForm((current) => current && ({ ...current, taxIncluded: event.target.checked }))}
+                />
+                <span>内税</span>
+              </label>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={lineForm.visible}
+                  onChange={(event) => setLineForm((current) => current && ({ ...current, visible: event.target.checked }))}
+                />
+                <span>表示する</span>
+              </label>
+              <label>
+                <div>回収状態</div>
+                <select
+                  value={lineForm.collectionStatus}
+                  onChange={(event) =>
+                    setLineForm(
+                      (current) =>
+                        current && ({
+                          ...current,
+                          collectionStatus: event.target.value as ServiceLine['collectionStatus']
+                        })
+                    )
+                  }
+                  style={inputStyle}
+                >
+                  <option value="uncollected">uncollected</option>
+                  <option value="collected">collected</option>
+                </select>
+              </label>
+            </div>
+            {/* {isLineDirty ? (
+              <div
+                className="note"
+                style={{
+                  marginTop: 12,
+                  background: '#fff0f4',
+                  color: '#a01854',
+                  border: '1px solid #efbfd1',
+                  fontWeight: 700
+                }}
+              >
+                この明細には未反映の変更があります。<code>プレビューに反映</code> を実行してください。
+              </div>
+            ) : null} */}
+            {/* {showSheetSyncReminder && !withinDialog ? (
+              <div
+                className="note"
+                style={{
+                  marginTop: 12,
+                  background: '#fff4ea',
+                  color: '#8b3f08',
+                  border: '1px solid #f0c8a0'
+                }}
+              >
+                <strong>⚠️まだスプレッドシートへ反映していません。</strong>
+                <br />
+                必ず左の <code>スプレッドシートへ保存</code> を実行してください。
+              </div>
+            ) : null} */}
+            <div className="hero-actions" style={{ marginTop: 18 }}>
+              <button
+                className="button-link secondary"
+                type="button"
+                onClick={async () => {
+                  const duplicated = await duplicateCurrentLine();
+                  if (duplicated && withinDialog) {
+                    setLineEditorDialogOpen(false);
+                  }
+                }}
+              >
+                明細を複製
+              </button>
+              <button
+                className="button-link secondary"
+                type="button"
+                onClick={async () => {
+                  await deleteCurrentLine();
+                  if (withinDialog) {
+                    setLineEditorDialogOpen(false);
+                  }
+                }}
+              >
+                明細を削除
+              </button>
+              <button
+                className={`button-link ${isPreviewApplied ? 'done' : 'primary'}`}
+                type="button"
+                onClick={async () => {
+                  const saved = await saveLine();
+                  if (saved && withinDialog) {
+                    setLineEditorDialogOpen(false);
+                  }
+                }}
+                disabled={pending}
+                style={
+                  isLineDirty
+                    ? {
+                      background: 'linear-gradient(180deg, #d61f68, #a61055)'
+                    }
+                    : undefined
+                }
+              >
+                変更を保存
+              </button>
+            </div>
+          </>
+        )}
       </>
     );
   }
@@ -1706,15 +2007,15 @@ export function ProjectEditor({
               onClick={() => void syncProjectToSheet()}
               disabled={sheetSyncPending || !canSyncToSheet}
             >
-              {sheetSyncPending ? 'スプレッドシートへ保存中...' : 'スプレッドシートへ保存'}
+              {sheetSyncPending ? 'スプレッドシートへ保存中...' : 'スプレッドシートへ変更を保存'}
             </button>
-            <button className="button-link secondary" type="button" onClick={downloadProjectCsv}>
+            {/* <button className="button-link secondary" type="button" onClick={downloadProjectCsv}>
               CSVを書き出す
-            </button>
+            </button> */}
           </div>
         </article>
 
-        <article
+        {/* <article
           className="card"
           style={
             isLineDirty
@@ -1726,211 +2027,36 @@ export function ProjectEditor({
           }
         >
           <h2>案件情報</h2>
-          {editableLines.length === 0 ? (
-            <>
-              <p>編集できる明細がありません。</p>
-              <div className="hero-actions" style={{ marginTop: 18 }}>
-                <button className="button-link primary" type="button" onClick={() => void createNewLine()}>
-                  明細を追加
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <label>
-                <div>対象明細</div>
-                <select
-                  value={editingLineId}
-                  onChange={(event) => syncLineForm(event.target.value)}
-                  style={inputStyle}
-                >
-                  {editableLines.length > 1 ? <option value="">選択してください</option> : null}
-                  {editableLines.map((line) => (
-                    <option key={line.id} value={line.id}>
-                      {formatEditingLineLabel(line)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {!lineForm ? (
-                <>
-                  <p style={{ marginTop: 12 }}>対象明細を選択してください。</p>
-                  <div className="hero-actions" style={{ marginTop: 18 }}>
-                    <button className="button-link primary" type="button" onClick={() => void createNewLine()}>
-                      明細を追加
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
-                    <label>
-                      <div>サービス日</div>
-                      <input
-                        type="date"
-                        value={lineForm.serviceDate}
-                        onChange={(event) => setLineForm((current) => current && ({ ...current, serviceDate: event.target.value }))}
-                        style={inputStyle}
-                      />
-                    </label>
-                    <label>
-                      <div>サービス名</div>
-                      <input
-                        value={lineForm.serviceName}
-                        onChange={(event) => setLineForm((current) => current && ({ ...current, serviceName: event.target.value }))}
-                        style={inputStyle}
-                      />
-                    </label>
-                    <label>
-                      <div>担当</div>
-                      <input
-                        value={lineForm.staffName}
-                        onChange={(event) => setLineForm((current) => current && ({ ...current, staffName: event.target.value }))}
-                        style={inputStyle}
-                      />
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                      <label>
-                        <div>単価</div>
-                        <input
-                          type="number"
-                          value={lineForm.price}
-                          onChange={(event) => setLineForm((current) => current && ({ ...current, price: event.target.value }))}
-                          style={inputStyle}
-                        />
-                      </label>
-                      <label>
-                        <div>数量</div>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={lineForm.quantity}
-                          onChange={(event) => setLineForm((current) => current && ({ ...current, quantity: event.target.value }))}
-                          style={inputStyle}
-                        />
-                      </label>
-                      <label>
-                        <div>単位</div>
-                        <input
-                          value={lineForm.unit}
-                          onChange={(event) => setLineForm((current) => current && ({ ...current, unit: event.target.value }))}
-                          style={inputStyle}
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      <div>備考</div>
-                      <input
-                        value={lineForm.remarks}
-                        onChange={(event) => setLineForm((current) => current && ({ ...current, remarks: event.target.value }))}
-                        style={inputStyle}
-                      />
-                    </label>
-                    <label>
-                      <div>メモ</div>
-                      <textarea
-                        value={lineForm.memo}
-                        onChange={(event) => setLineForm((current) => current && ({ ...current, memo: event.target.value }))}
-                        style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }}
-                      />
-                    </label>
-                    <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={lineForm.taxIncluded}
-                        onChange={(event) => setLineForm((current) => current && ({ ...current, taxIncluded: event.target.checked }))}
-                      />
-                      <span>内税</span>
-                    </label>
-                    <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={lineForm.visible}
-                        onChange={(event) => setLineForm((current) => current && ({ ...current, visible: event.target.checked }))}
-                      />
-                      <span>表示する</span>
-                    </label>
-                    <label>
-                      <div>回収状態</div>
-                      <select
-                        value={lineForm.collectionStatus}
-                        onChange={(event) =>
-                          setLineForm(
-                            (current) =>
-                              current && ({
-                                ...current,
-                                collectionStatus: event.target.value as ServiceLine['collectionStatus']
-                              })
-                          )
-                        }
-                        style={inputStyle}
-                      >
-                        <option value="uncollected">uncollected</option>
-                        <option value="collected">collected</option>
-                      </select>
-                    </label>
-                  </div>
-                  {isLineDirty ? (
-                    <div
-                      className="note"
-                      style={{
-                        marginTop: 12,
-                        background: '#fff0f4',
-                        color: '#a01854',
-                        border: '1px solid #efbfd1',
-                        fontWeight: 700
-                      }}
-                    >
-                      この明細には未反映の変更があります。<code>プレビューに反映</code> を実行してください。
-                    </div>
-                  ) : null}
-                  {showSheetSyncReminder ? (
-                    <div
-                      className="note"
-                      style={{
-                        marginTop: 12,
-                        background: '#fff4ea',
-                        color: '#8b3f08',
-                        border: '1px solid #f0c8a0'
-                      }}
-                    >
-                      <strong>⚠️まだスプレッドシートへ反映していません。</strong>
-                      <br />
-                      必ず左の <code>スプレッドシートへ保存</code> を実行してください。
-                    </div>
-                  ) : null}
-                  <div className="hero-actions" style={{ marginTop: 18 }}>
-                    {/* <button className="button-link secondary" type="button" onClick={() => void createNewLine()}>
-                      明細を追加
-                    </button> */}
-                    <button className="button-link secondary" type="button" onClick={() => void duplicateCurrentLine()}>
-                      明細を複製
-                    </button>
-                    <button className="button-link secondary" type="button" onClick={() => void deleteCurrentLine()}>
-                      明細を削除
-                    </button>
-                    <button
-                      className={`button-link ${isPreviewApplied ? 'done' : 'primary'}`}
-                      type="button"
-                      onClick={() => void saveLine()}
-                      disabled={pending}
-                      style={
-                        isLineDirty
-                          ? {
-                            background: 'linear-gradient(180deg, #d61f68, #a61055)'
-                          }
-                          : undefined
-                      }
-                    >
-                      プレビューに反映
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </article>
+          {renderLineEditorContent()}
+        </article> */}
       </section>
+
+      {lineEditorDialogOpen ? (
+        <div className="dialog-backdrop" role="presentation" onClick={() => setLineEditorDialogOpen(false)}>
+          <div
+            className="dialog-card dialog-card-wide"
+            role="dialog"
+            aria-modal="true"
+            aria-label="案件情報"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="dialog-header">
+              <div>
+                <h2 className="dialog-title">案件情報・・・</h2>
+              </div>
+              <button
+                type="button"
+                className="dialog-close-button"
+                aria-label="ダイアログを閉じる"
+                onClick={() => setLineEditorDialogOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            {renderLineEditorContent(true)}
+          </div>
+        </div>
+      ) : null}
 
       {message ? <div className="note">{message}</div> : null}
       {error ? <div className="note" style={{ background: '#f7dfd7', color: '#7a2f1b' }}>{error}</div> : null}
