@@ -25,7 +25,6 @@ export function CreateProjectPanel({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState<{
-    customerId: string;
     customerName: string;
     subject: string;
     defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
@@ -34,7 +33,6 @@ export function CreateProjectPanel({
     companyName: string;
     defaultRemarks: string;
   }>({
-    customerId: '',
     customerName: '',
     subject: '',
     defaultInvoiceDateMode: 'monthEnd',
@@ -62,12 +60,12 @@ export function CreateProjectPanel({
 
     const resolvedInvoiceRecipient = buildInvoiceRecipient(form, invoiceRecipientMode);
 
-    if (!form.customerId.trim()) {
-      setError('顧客IDを入力してください。');
-      return;
-    }
     if (!form.customerName.trim()) {
       setError('利用者名を入力してください。');
+      return;
+    }
+    if (!form.companyName.trim()) {
+      setError('会社名を入力してください。');
       return;
     }
     if (!resolvedInvoiceRecipient) {
@@ -108,7 +106,9 @@ export function CreateProjectPanel({
         </>
       )}
       <div style={{ display: 'grid', gap: 12 }}>
-        <input placeholder="顧客ID" value={form.customerId} onChange={(e) => setForm((c) => ({ ...c, customerId: e.target.value }))} />
+        <div className="note" style={{ margin: 0 }}>
+          利用者IDは登録時に自動採番されます。形式: 会社2桁 / 施設2桁 / 利用者3桁
+        </div>
         <input placeholder="利用者名" value={form.customerName} onChange={(e) => setForm((c) => ({ ...c, customerName: e.target.value }))} />
         <label style={{ fontSize: 12, color: '#666' }}>請求日タイプ</label>
         <div className="choice-chip-row" role="group" aria-label="請求日タイプ">

@@ -4,16 +4,16 @@ export interface ValidationResult {
 }
 
 export function validateProjectInput(input: {
-  customerId: string;
   customerName: string;
   invoiceRecipient: string;
+  companyName: string;
   defaultInvoiceDateMode?: string;
 }): ValidationResult {
-  if (!input.customerId.trim()) {
-    return { ok: false, message: '顧客IDを入力してください。' };
-  }
   if (!input.customerName.trim()) {
     return { ok: false, message: '利用者名を入力してください。' };
+  }
+  if (!input.companyName.trim()) {
+    return { ok: false, message: '会社名を入力してください。' };
   }
   if (!input.invoiceRecipient.trim()) {
     return { ok: false, message: '請求先を入力してください。' };

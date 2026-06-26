@@ -96,7 +96,7 @@ export interface ProjectExportBundle {
 }
 
 export interface CreateProjectInput {
-  customerId: string;
+  customerId?: string;
   customerName: string;
   subject: string;
   defaultInvoiceDateMode: Project['defaultInvoiceDateMode'];
@@ -110,6 +110,12 @@ export interface CreateProjectInput {
   issuerBoxWidth: number;
   stampOffsetX: number;
   stampOffsetY: number;
+}
+
+interface ProjectIdentityRow {
+  customerId: string;
+  companyName: string;
+  facilityName: string;
 }
 
 export interface CreateServiceLineInput {
@@ -668,35 +674,55 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   const id = crypto.randomUUID();
 
   try {
-    const db = await getDb();
-    const result = await db.query<Project>(insertProjectSql, [
-      id,
-      input.customerId,
-      input.customerName,
-      input.subject,
-      input.defaultInvoiceDateMode,
-      input.invoiceRecipient,
-      input.facilityName,
-      input.companyName,
-      input.issueDate || '',
-      input.defaultRemarks,
-      input.issuerBoxOffsetX,
-      input.issuerBoxOffsetY,
-      input.issuerBoxWidth,
-      input.stampOffsetX,
-      input.stampOffsetY,
-      'draft',
-      now,
-      now
-    ]);
+    return await withTransaction(async (db) => {
+      const customerId =
+        input.customerId ||
+        generateCustomerId(
+          (
+            await db.query<ProjectIdentityRow>(
+              `
+                select
+                  customer_id as "customerId",
+                  company_name as "companyName",
+                  facility_name as "facilityName"
+                from projects
+              `
+            )
+          ).rows,
+          input.companyName,
+          input.facilityName
+        );
+      const result = await db.query<Project>(insertProjectSql, [
+        id,
+        customerId,
+        input.customerName,
+        input.subject,
+        input.defaultInvoiceDateMode,
+        input.invoiceRecipient,
+        input.facilityName,
+        input.companyName,
+        input.issueDate || '',
+        input.defaultRemarks,
+        input.issuerBoxOffsetX,
+        input.issuerBoxOffsetY,
+        input.issuerBoxWidth,
+        input.stampOffsetX,
+        input.stampOffsetY,
+        'draft',
+        now,
+        now
+      ]);
 
-    return result.rows[0];
+      return result.rows[0];
+    });
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
+    const store = await readLocalStore();
+    const customerId = input.customerId || generateCustomerId(store.projects, input.companyName, input.facilityName);
     const project: Project = {
       id,
       importId: null,
-      customerId: input.customerId,
+      customerId,
       customerName: input.customerName,
       subject: input.subject,
       defaultInvoiceDateMode: input.defaultInvoiceDateMode,
@@ -714,13 +740,120 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       createdAt: now,
       updatedAt: now
     };
-    const store = await readLocalStore();
     await writeLocalStore({
       ...store,
       projects: upsertById(store.projects, project)
     });
     return project;
   }
+}
+
+function generateCustomerId(
+  projects: Array<Pick<ProjectIdentityRow, 'customerId' | 'companyName' | 'facilityName'>>,
+  companyName: string,
+  facilityName: string
+): string {
+  const normalizedCompanyName = companyName.trim();
+  const normalizedFacilityName = facilityName.trim();
+
+  if (!normalizedCompanyName) {
+    throw new Error('会社名を入力してください。');
+  }
+
+  const normalizedProjects = projects.map((project) => ({
+    customerId: String(project.customerId || '').trim(),
+    companyName: String(project.companyName || '').trim(),
+    facilityName: String(project.facilityName || '').trim()
+  }));
+
+  const parsedProjects = normalizedProjects
+    .map((project) => {
+      const match = project.customerId.match(/^(\d{2})(\d{2})(\d{3})$/);
+      if (!match) return null;
+
+      return {
+        companyName: project.companyName,
+        facilityName: project.facilityName,
+        companyCode: Number(match[1]),
+        facilityCode: Number(match[2]),
+        userCode: Number(match[3])
+      };
+    })
+    .filter((project): project is NonNullable<typeof project> => Boolean(project));
+
+  const companyNames = Array.from(
+    new Set(normalizedProjects.map((project) => project.companyName).filter(Boolean))
+  );
+  const sameCompanyProjects = parsedProjects.filter((project) => project.companyName === normalizedCompanyName);
+  const usedCompanyCodes = new Set(parsedProjects.map((project) => project.companyCode));
+  const companyCode =
+    sameCompanyProjects[0]?.companyCode ??
+    resolveOrdinalCode(companyNames, normalizedCompanyName, usedCompanyCodes, '会社コード');
+
+  const facilityNamesForCompany = Array.from(
+    new Set(
+      normalizedProjects
+        .filter((project) => project.companyName === normalizedCompanyName)
+        .map((project) => project.facilityName)
+        .filter(Boolean)
+    )
+  );
+  const facilityCode =
+    normalizedFacilityName === ''
+      ? 0
+      : sameCompanyProjects.find((project) => project.facilityName === normalizedFacilityName)?.facilityCode ??
+        resolveOrdinalCode(
+          facilityNamesForCompany,
+          normalizedFacilityName,
+          new Set(sameCompanyProjects.map((project) => project.facilityCode).filter((code) => code > 0)),
+          '施設コード'
+        );
+
+  const sameGroupProjects = normalizedProjects.filter(
+    (project) => project.companyName === normalizedCompanyName && project.facilityName === normalizedFacilityName
+  );
+  const sameGroupParsedProjects = parsedProjects.filter(
+    (project) => project.companyName === normalizedCompanyName && project.facilityName === normalizedFacilityName
+  );
+  const userCode = nextAvailableCode(
+    new Set(sameGroupParsedProjects.map((project) => project.userCode)),
+    sameGroupProjects.length + 1,
+    999,
+    '利用者コード'
+  );
+
+  return `${padCode(companyCode, 2)}${padCode(facilityCode, 2)}${padCode(userCode, 3)}`;
+}
+
+function nextAvailableCode(usedCodes: Set<number>, start: number, max: number, label: string): number {
+  for (let code = Math.max(1, start); code <= max; code += 1) {
+    if (!usedCodes.has(code)) {
+      return code;
+    }
+  }
+
+  throw new Error(`${label}の採番上限に達しました。`);
+}
+
+function resolveOrdinalCode(
+  existingNames: string[],
+  targetName: string,
+  usedCodes: Set<number>,
+  label: string
+): number {
+  const ordinal = existingNames.indexOf(targetName) + 1;
+  if (ordinal > 0) {
+    if (ordinal > 99) {
+      throw new Error(`${label}の採番上限に達しました。`);
+    }
+    return ordinal;
+  }
+
+  return nextAvailableCode(usedCodes, existingNames.length + 1, 99, label);
+}
+
+function padCode(value: number, length: number): string {
+  return String(value).padStart(length, '0');
 }
 
 export async function createServiceLine(input: CreateServiceLineInput): Promise<ServiceLine> {
