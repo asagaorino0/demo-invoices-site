@@ -49,6 +49,9 @@ export async function PATCH(
       defaultRemarks?: string;
       issuerBoxOffsetX?: number;
       issuerBoxOffsetY?: number;
+      issuerBoxWidth?: number;
+      stampOffsetX?: number;
+      stampOffsetY?: number;
       status?: 'draft' | 'ready_for_export' | 'exported';
     };
 
@@ -67,6 +70,9 @@ export async function PATCH(
       defaultRemarks: String(body.defaultRemarks || '').trim(),
       issuerBoxOffsetX: Number(body.issuerBoxOffsetX || 0),
       issuerBoxOffsetY: Number(body.issuerBoxOffsetY || 0),
+      issuerBoxWidth: Number(body.issuerBoxWidth || 0),
+      stampOffsetX: Number(body.stampOffsetX || 0),
+      stampOffsetY: Number(body.stampOffsetY || 0),
       status: body.status || 'draft'
     });
 

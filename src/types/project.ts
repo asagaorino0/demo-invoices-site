@@ -41,6 +41,9 @@ export interface Project {
   defaultRemarks: string;
   issuerBoxOffsetX: number;
   issuerBoxOffsetY: number;
+  issuerBoxWidth: number;
+  stampOffsetX: number;
+  stampOffsetY: number;
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;

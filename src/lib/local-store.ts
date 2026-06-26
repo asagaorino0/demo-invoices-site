@@ -102,6 +102,9 @@ function normalizeProject(value: unknown): Project {
     defaultRemarks: String(entry.defaultRemarks || ''),
     issuerBoxOffsetX: Number.isFinite(entry.issuerBoxOffsetX) ? Number(entry.issuerBoxOffsetX) : 0,
     issuerBoxOffsetY: Number.isFinite(entry.issuerBoxOffsetY) ? Number(entry.issuerBoxOffsetY) : 0,
+    issuerBoxWidth: Number.isFinite(entry.issuerBoxWidth) ? Number(entry.issuerBoxWidth) : 0,
+    stampOffsetX: Number.isFinite(entry.stampOffsetX) ? Number(entry.stampOffsetX) : 0,
+    stampOffsetY: Number.isFinite(entry.stampOffsetY) ? Number(entry.stampOffsetY) : 0,
     status:
       entry.status === 'ready_for_export' || entry.status === 'exported' ? entry.status : 'draft',
     createdAt: String(entry.createdAt || ''),

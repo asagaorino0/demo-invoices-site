@@ -20,6 +20,11 @@ create table if not exists projects (
   company_name text not null default '',
   issue_date date,
   default_remarks text not null default '',
+  issuer_box_offset_x integer not null default 0,
+  issuer_box_offset_y integer not null default 0,
+  issuer_box_width integer not null default 0,
+  stamp_offset_x integer not null default 0,
+  stamp_offset_y integer not null default 0,
   status text not null default 'draft' check (status in ('draft', 'ready_for_export', 'exported')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

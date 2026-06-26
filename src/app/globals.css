@@ -27,7 +27,7 @@ body {
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.7), transparent 34%),
     linear-gradient(180deg, #e9d7e0 0%, #f4e7ee 50%, #f9f1f5 100%);
-  line-height: 1.6;
+  line-height: 1.4;
   padding: 24px 12px;
   font-family: 'Noto Sans JP', sans-serif;
 }
@@ -644,10 +644,11 @@ a {
 }
 
 .invoice-doc {
-  width: 794px;
+  width: 190mm;
+  min-width: 0;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 40px 46px 34px;
+  padding: 10mm 11mm 8mm;
   border-radius: 24px;
   border: 1px solid #efeff2;
   background: var(--paper);
@@ -671,9 +672,10 @@ a {
 
 .invoice-doc-header {
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
   margin-bottom: 24px;
+  align-items: start;
 }
 
 .invoice-doc-recipient {
@@ -697,11 +699,13 @@ a {
 }
 
 .invoice-doc-amount strong {
-  font-size: 28px;
+  font-size: 18px;
 }
 
 .invoice-doc-company {
   position: relative;
+  width: fit-content;
+  max-width: 100%;
   min-height: 150px;
   padding: 16px;
   border: 1px dashed #cbc1ca;
@@ -709,6 +713,13 @@ a {
   color: #2f2530;
   transform-origin: top right;
   transition: box-shadow 120ms ease, border-color 120ms ease;
+  justify-self: end;
+}
+
+.invoice-doc-company-main {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .invoice-doc-company h3 {
@@ -716,9 +727,65 @@ a {
   font-size: 16px;
 }
 
+.invoice-doc-company-representative {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.invoice-doc-company-representative strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .invoice-doc-company p {
-  margin: 3px 0 0;
+  margin: 1px 0 0;
   color: inherit;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.invoice-doc-company-stamp {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 68px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  transform-origin: top right;
+}
+
+.invoice-doc-company-stamp.draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.invoice-doc-company-stamp.dragging {
+  cursor: grabbing;
+}
+
+.invoice-doc-company-stamp img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.invoice-doc-company-address {
+  line-break: strict;
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+
+.invoice-doc-company-email {
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: -0.01em;
 }
 
 .invoice-doc-company.draggable {
@@ -733,11 +800,44 @@ a {
   box-shadow: 0 12px 24px rgba(47, 128, 237, 0.12);
 }
 
+.invoice-doc-company.resizing {
+  border-color: rgba(47, 128, 237, 0.45);
+  box-shadow: 0 12px 24px rgba(47, 128, 237, 0.12);
+}
+
+.invoice-doc-company-resize-handle {
+  position: absolute;
+  top: 10px;
+  right: -8px;
+  bottom: 10px;
+  width: 16px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.invoice-doc-company-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  width: 3px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(203, 193, 202, 0.9);
+  transform: translateY(-50%);
+  transition: background 120ms ease;
+}
+
+.invoice-doc-company-resize-handle.active::before,
+.invoice-doc-company.resizable:hover .invoice-doc-company-resize-handle::before {
+  background: rgba(47, 128, 237, 0.65);
+}
+
 .invoice-chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 30px;
 }
 
 .invoice-chip {
@@ -880,6 +980,7 @@ a {
 }
 
 @media print {
+
   html,
   body {
     margin: 0;
@@ -904,8 +1005,8 @@ a {
   }
 
   .invoice-doc-header {
-    grid-template-columns: 1.05fr 0.95fr !important;
-    gap: 22px;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 18px;
     align-items: start;
   }
 

@@ -152,6 +152,7 @@ export function ProjectEditor({
     targetLineId: '',
     placement: ''
   });
+  const [printRenderNonce, setPrintRenderNonce] = useState(0);
   const [activeTab, setActiveTab] = useState<'uncollected' | 'invoice' | 'collected' | 'receipt'>(
     'uncollected'
   );
@@ -164,8 +165,11 @@ export function ProjectEditor({
     companyName: project.companyName,
     issueDate: project.issueDate || '',
     defaultRemarks: project.defaultRemarks,
+    issuerBoxWidth: project.issuerBoxWidth || 0,
     issuerBoxOffsetX: project.issuerBoxOffsetX || 0,
     issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
+    stampOffsetX: project.stampOffsetX || 0,
+    stampOffsetY: project.stampOffsetY || 0,
     status: project.status
   });
   const [savedHeader, setSavedHeader] = useState({
@@ -177,8 +181,11 @@ export function ProjectEditor({
     companyName: project.companyName,
     issueDate: project.issueDate || '',
     defaultRemarks: project.defaultRemarks,
+    issuerBoxWidth: project.issuerBoxWidth || 0,
     issuerBoxOffsetX: project.issuerBoxOffsetX || 0,
     issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
+    stampOffsetX: project.stampOffsetX || 0,
+    stampOffsetY: project.stampOffsetY || 0,
     status: project.status
   });
   const [sheetSyncStatus, setSheetSyncStatus] = useState(project.status);
@@ -238,8 +245,11 @@ export function ProjectEditor({
     form.companyName !== savedHeader.companyName ||
     form.issueDate !== savedHeader.issueDate ||
     form.defaultRemarks !== savedHeader.defaultRemarks ||
+    form.issuerBoxWidth !== savedHeader.issuerBoxWidth ||
     form.issuerBoxOffsetX !== savedHeader.issuerBoxOffsetX ||
     form.issuerBoxOffsetY !== savedHeader.issuerBoxOffsetY ||
+    form.stampOffsetX !== savedHeader.stampOffsetX ||
+    form.stampOffsetY !== savedHeader.stampOffsetY ||
     form.status !== savedHeader.status;
   const isLineDirty =
     !!editingLine &&
@@ -329,8 +339,11 @@ export function ProjectEditor({
       companyName: form.companyName,
       issueDate: form.issueDate || null,
       defaultRemarks: form.defaultRemarks,
+      issuerBoxWidth: form.issuerBoxWidth,
       issuerBoxOffsetX: form.issuerBoxOffsetX,
       issuerBoxOffsetY: form.issuerBoxOffsetY,
+      stampOffsetX: form.stampOffsetX,
+      stampOffsetY: form.stampOffsetY,
       status: form.status
     }),
     [form, project]
@@ -414,8 +427,11 @@ export function ProjectEditor({
       companyName: project.companyName,
       issueDate: project.issueDate || '',
       defaultRemarks: project.defaultRemarks,
+      issuerBoxWidth: project.issuerBoxWidth || 0,
       issuerBoxOffsetX: project.issuerBoxOffsetX || 0,
       issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
+      stampOffsetX: project.stampOffsetX || 0,
+      stampOffsetY: project.stampOffsetY || 0,
       status: project.status
     };
     setForm(nextHeader);
@@ -600,8 +616,11 @@ export function ProjectEditor({
       companyName: form.companyName,
       issueDate: form.defaultInvoiceDateMode === 'custom' ? form.issueDate : resolvedIssueDate,
       defaultRemarks: form.defaultRemarks,
+      issuerBoxWidth: form.issuerBoxWidth,
       issuerBoxOffsetX: form.issuerBoxOffsetX,
       issuerBoxOffsetY: form.issuerBoxOffsetY,
+      stampOffsetX: form.stampOffsetX,
+      stampOffsetY: form.stampOffsetY,
       status: form.status
     });
     setSheetSyncStatus(form.status);
@@ -1159,9 +1178,9 @@ export function ProjectEditor({
   }
 
   async function openPrintWindow(kind: 'invoice' | 'receipt') {
-    if (kind === 'invoice' && isHeaderDirty) {
+    if (isHeaderDirty) {
       const synced = await syncProjectToSheet({
-        successMessage: '件名を Google Sheets に保存しました。'
+        successMessage: '印刷前の位置と件名を Google Sheets に保存しました。'
       });
       if (!synced) {
         return;
@@ -1231,6 +1250,7 @@ export function ProjectEditor({
     iframeWindow.addEventListener(
       'afterprint',
       () => {
+        setPrintRenderNonce((current) => current + 1);
         iframe.remove();
       },
       { once: true }
@@ -1734,7 +1754,7 @@ export function ProjectEditor({
                       印刷 / PDF
                     </button>
                   </div>
-                  {invoiceLines.length > 0 ? (
+                  {/* {invoiceLines.length > 0 ? (
                     <div className="invoice-preview-controls">
                       <label className="invoice-preview-subject-control">
                         <span className="invoice-preview-subject-label">件名</span>
@@ -1750,6 +1770,26 @@ export function ProjectEditor({
                           プレビュー、印刷 / PDF、スプレッドシート保存に反映されます。
                         </span>
                       </label>
+                      <div className="invoice-preview-position-tools">
+                        <span className="invoice-preview-subject-label">送り主欄の幅</span>
+                        <div className="invoice-preview-position-actions">
+                          <button
+                            className="button-link secondary"
+                            type="button"
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                issuerBoxWidth: 0
+                              }))
+                            }
+                          >
+                            幅をリセット
+                          </button>
+                        </div>
+                        <span className="invoice-preview-subject-help">
+                          送り主欄の右端をドラッグすると幅を調整できます。未設定時はテキスト幅に合わせて表示されます。
+                        </span>
+                      </div>
                       <div className="invoice-preview-position-tools">
                         <span className="invoice-preview-subject-label">送り主欄の位置</span>
                         <div className="invoice-preview-position-actions">
@@ -1771,6 +1811,45 @@ export function ProjectEditor({
                           送り主欄をドラッグすると位置を調整できます。印刷 / PDF にも反映されます。
                         </span>
                       </div>
+                      <div className="invoice-preview-position-tools">
+                        <span className="invoice-preview-subject-label">角印の位置</span>
+                        <div className="invoice-preview-position-actions">
+                          <button
+                            className="button-link secondary"
+                            type="button"
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                stampOffsetX: 0,
+                                stampOffsetY: 0
+                              }))
+                            }
+                          >
+                            位置をリセット
+                          </button>
+                        </div>
+                        <span className="invoice-preview-subject-help">
+                          角印をドラッグすると位置を調整できます。印刷 / PDF 実行時にスプレッドシートへ保存されます。
+                        </span>
+                      </div>
+                    </div>
+                  ) : null} */}
+                  {invoiceLines.length > 0 ? (
+                    <div className="invoice-preview-controls">
+                      <label className="invoice-preview-subject-control">
+                        <span className="invoice-preview-subject-label">件名</span>
+                        <input
+                          value={form.subject}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, subject: event.target.value }))
+                          }
+                          placeholder="請求書に表示する件名"
+                          style={inputStyle}
+                        />
+                        <span className="invoice-preview-subject-help">
+                          プレビュー、印刷 / PDF、スプレッドシート保存に反映されます。
+                        </span>
+                      </label>
                     </div>
                   ) : null}
                   {invoiceLines.length === 0 ? (
@@ -1782,12 +1861,28 @@ export function ProjectEditor({
                         project={previewProject}
                         lines={invoiceLines}
                         kind="invoice"
+                        stampRenderKey={printRenderNonce}
                         allowIssuerReposition
+                        allowIssuerResize
+                        allowStampReposition
+                        onIssuerWidthChange={(width) =>
+                          setForm((current) => ({
+                            ...current,
+                            issuerBoxWidth: width
+                          }))
+                        }
                         onIssuerPositionChange={(position) =>
                           setForm((current) => ({
                             ...current,
                             issuerBoxOffsetX: position.x,
                             issuerBoxOffsetY: position.y
+                          }))
+                        }
+                        onStampPositionChange={(position) =>
+                          setForm((current) => ({
+                            ...current,
+                            stampOffsetX: position.x,
+                            stampOffsetY: position.y
                           }))
                         }
                       />
@@ -1979,7 +2074,28 @@ export function ProjectEditor({
                 <p>領収書に含める回収済明細を選ぶと、ここに領収書が表示されます。</p>
               ) : (
                 <div ref={receiptPrintRef}>
-                  <InvoicePreview config={config} project={previewProject} lines={previewReceiptLines} kind="receipt" />
+                  <InvoicePreview
+                    config={config}
+                    project={previewProject}
+                    lines={previewReceiptLines}
+                    kind="receipt"
+                    stampRenderKey={printRenderNonce}
+                    allowIssuerResize
+                    allowStampReposition
+                    onIssuerWidthChange={(width) =>
+                      setForm((current) => ({
+                        ...current,
+                        issuerBoxWidth: width
+                      }))
+                    }
+                    onStampPositionChange={(position) =>
+                      setForm((current) => ({
+                        ...current,
+                        stampOffsetX: position.x,
+                        stampOffsetY: position.y
+                      }))
+                    }
+                  />
                 </div>
               )}
             </>

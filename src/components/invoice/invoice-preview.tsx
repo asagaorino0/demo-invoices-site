@@ -20,12 +20,20 @@ interface InvoicePreviewProps {
   project: Project;
   lines: ServiceLine[];
   kind: 'invoice' | 'receipt';
+  stampRenderKey?: number;
   allowIssuerReposition?: boolean;
   onIssuerPositionChange?: (position: { x: number; y: number }) => void;
+  allowIssuerResize?: boolean;
+  onIssuerWidthChange?: (width: number) => void;
+  allowStampReposition?: boolean;
+  onStampPositionChange?: (position: { x: number; y: number }) => void;
 }
 
 const ISSUER_OFFSET_X_RANGE = { min: -220, max: 220 };
 const ISSUER_OFFSET_Y_RANGE = { min: -80, max: 220 };
+const ISSUER_WIDTH_RANGE = { min: 140, max: 720 };
+const STAMP_OFFSET_X_RANGE = { min: -220, max: 120 };
+const STAMP_OFFSET_Y_RANGE = { min: -40, max: 180 };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -36,8 +44,13 @@ export function InvoicePreview({
   project,
   lines,
   kind,
+  stampRenderKey = 0,
   allowIssuerReposition = false,
-  onIssuerPositionChange
+  onIssuerPositionChange,
+  allowIssuerResize = false,
+  onIssuerWidthChange,
+  allowStampReposition = false,
+  onStampPositionChange
 }: InvoicePreviewProps) {
   const totals = calcTotals(lines, config);
   const rows = buildDocumentRows(lines);
@@ -52,6 +65,11 @@ export function InvoicePreview({
     x: Math.round(project.issuerBoxOffsetX || 0),
     y: Math.round(project.issuerBoxOffsetY || 0)
   };
+  const stampPosition = {
+    x: Math.round(project.stampOffsetX || 0),
+    y: Math.round(project.stampOffsetY || 0)
+  };
+  const issuerBoxWidth = Math.round(project.issuerBoxWidth || 0);
   const dragStateRef = useRef<{
     pointerId: number;
     startClientX: number;
@@ -59,7 +77,21 @@ export function InvoicePreview({
     startOffsetX: number;
     startOffsetY: number;
   } | null>(null);
+  const issuerResizeStateRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startWidth: number;
+  } | null>(null);
+  const stampDragStateRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startOffsetX: number;
+    startOffsetY: number;
+  } | null>(null);
   const [isDraggingIssuer, setIsDraggingIssuer] = useState(false);
+  const [isResizingIssuerWidth, setIsResizingIssuerWidth] = useState(false);
+  const [isDraggingStamp, setIsDraggingStamp] = useState(false);
   const remarksText = [
     project.defaultRemarks,
     ...lines.map((line) => line.remarks)
@@ -68,6 +100,15 @@ export function InvoicePreview({
     .filter(Boolean)
     .filter((text, index, array) => array.indexOf(text) === index)
     .join('\n');
+  const issuerName = String(config.issuerName || '').trim();
+  const issuerPostalCode = String(config.issuerPostalCode || '').trim();
+  const issuerAddress = String(config.issuerAddress || '').trim();
+  const issuerContact = String(config.issuerContact || '').trim();
+  const issuerEmail = String(config.issuerEmail || '').trim();
+  const issuerInvoiceNumber = String(config.issuerInvoiceNumber || '').trim();
+  const issuerRepresentativeName = String(config.issuerRepresentativeName || '').trim();
+  const issuerRepresentativeTitle = String(config.issuerRepresentativeTitle || '').trim();
+  const issuerStampUrl = String(config.issuerStampUrl || '').trim();
 
   function handleIssuerPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (!allowIssuerReposition || !onIssuerPositionChange || event.button !== 0) {
@@ -120,6 +161,109 @@ export function InvoicePreview({
     setIsDraggingIssuer(false);
   }
 
+  function handleIssuerResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowIssuerResize || !onIssuerWidthChange || event.button !== 0) {
+      return;
+    }
+
+    issuerResizeStateRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startWidth: clamp(
+        event.currentTarget.parentElement?.getBoundingClientRect().width || issuerBoxWidth || ISSUER_WIDTH_RANGE.min,
+        ISSUER_WIDTH_RANGE.min,
+        ISSUER_WIDTH_RANGE.max
+      )
+    };
+    setIsResizingIssuerWidth(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function handleIssuerResizePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowIssuerResize || !onIssuerWidthChange) {
+      return;
+    }
+
+    const resizeState = issuerResizeStateRef.current;
+    if (!resizeState || resizeState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const nextWidth = clamp(
+      resizeState.startWidth + (event.clientX - resizeState.startClientX),
+      ISSUER_WIDTH_RANGE.min,
+      ISSUER_WIDTH_RANGE.max
+    );
+    onIssuerWidthChange(Math.round(nextWidth));
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function finishIssuerResize(event?: ReactPointerEvent<HTMLDivElement>) {
+    if (event && issuerResizeStateRef.current?.pointerId === event.pointerId) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      event.stopPropagation();
+    }
+    issuerResizeStateRef.current = null;
+    setIsResizingIssuerWidth(false);
+  }
+
+  function handleStampPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowStampReposition || !onStampPositionChange || event.button !== 0) {
+      return;
+    }
+
+    stampDragStateRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startOffsetX: stampPosition.x,
+      startOffsetY: stampPosition.y
+    };
+    setIsDraggingStamp(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function handleStampPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowStampReposition || !onStampPositionChange) {
+      return;
+    }
+
+    const dragState = stampDragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const nextX = clamp(
+      dragState.startOffsetX + (event.clientX - dragState.startClientX),
+      STAMP_OFFSET_X_RANGE.min,
+      STAMP_OFFSET_X_RANGE.max
+    );
+    const nextY = clamp(
+      dragState.startOffsetY + (event.clientY - dragState.startClientY),
+      STAMP_OFFSET_Y_RANGE.min,
+      STAMP_OFFSET_Y_RANGE.max
+    );
+    onStampPositionChange({
+      x: Math.round(nextX),
+      y: Math.round(nextY)
+    });
+    event.stopPropagation();
+  }
+
+  function finishStampDrag(event?: ReactPointerEvent<HTMLDivElement>) {
+    if (event && stampDragStateRef.current?.pointerId === event.pointerId) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      event.stopPropagation();
+    }
+    stampDragStateRef.current = null;
+    setIsDraggingStamp(false);
+  }
+
   return (
     <div className="invoice-doc-wrap">
       <article className="invoice-doc">
@@ -134,7 +278,7 @@ export function InvoicePreview({
 
         <div className="invoice-doc-title">{title}</div>
 
-        <div className="invoice-doc-header">
+        <div className="invoice-doc-header mb-32">
           <div>
             <div className="invoice-doc-recipient">{project.invoiceRecipient}</div>
             <div className="invoice-doc-copy">件名：{getProjectSubject(project)}</div>
@@ -146,8 +290,9 @@ export function InvoicePreview({
           </div>
 
           <div
-            className={`invoice-doc-company${allowIssuerReposition ? ' draggable' : ''}${isDraggingIssuer ? ' dragging' : ''}`}
+            className={`invoice-doc-company${issuerStampUrl ? ' has-stamp' : ''}${allowIssuerReposition ? ' draggable' : ''}${allowIssuerResize ? ' resizable' : ''}${isDraggingIssuer ? ' dragging' : ''}${isResizingIssuerWidth ? ' resizing' : ''}`}
             style={{
+              width: issuerBoxWidth > 0 ? `${issuerBoxWidth}px` : undefined,
               transform: `translate(${issuerPosition.x}px, ${issuerPosition.y}px)`
             }}
             onPointerDown={handleIssuerPointerDown}
@@ -155,19 +300,53 @@ export function InvoicePreview({
             onPointerUp={finishIssuerDrag}
             onPointerCancel={finishIssuerDrag}
           >
-            <h3>{config.issuerName}</h3>
-            <p>〒{config.issuerPostalCode || ''}</p>
-            <p>{config.issuerAddress || ''}</p>
-            <p>TEL：{config.issuerContact || ''}</p>
-            <p>{config.issuerEmail || ''}</p>
-            <p>登録番号：{config.issuerInvoiceNumber || ''}</p>
+            <div className="invoice-doc-company-main mt-12">
+              {issuerName ? <h3>{issuerName}</h3> : null}
+              {issuerRepresentativeName || issuerRepresentativeTitle ? (
+                <div className="invoice-doc-company-representative">
+                  {issuerRepresentativeTitle ? <span>{issuerRepresentativeTitle}</span> : null}
+                  {issuerRepresentativeName ? <span>{issuerRepresentativeName}</span> : null}
+                </div>
+              ) : null}
+              {issuerPostalCode ? <p className="invoice-doc-company-postal">〒{issuerPostalCode}</p> : null}
+              {issuerAddress ? <p className="invoice-doc-company-address">{issuerAddress}</p> : null}
+              {issuerContact ? <p className="invoice-doc-company-contact">TEL：{issuerContact}</p> : null}
+              {issuerEmail ? <p className="invoice-doc-company-email">{issuerEmail}</p> : null}
+              {issuerInvoiceNumber ? <p className="invoice-doc-company-number">登録番号：{issuerInvoiceNumber}</p> : null}
+            </div>
+            {issuerStampUrl ? (
+              <div
+                className={`invoice-doc-company-stamp${allowStampReposition ? ' draggable' : ''}${isDraggingStamp ? ' dragging' : ''}`}
+                aria-hidden="true"
+                style={{
+                  transform: `translate(${stampPosition.x}px, ${stampPosition.y}px)`
+                }}
+                onPointerDown={handleStampPointerDown}
+                onPointerMove={handleStampPointerMove}
+                onPointerUp={finishStampDrag}
+                onPointerCancel={finishStampDrag}
+              >
+                <img key={`stamp-${stampRenderKey}`} src={issuerStampUrl} alt="" />
+              </div>
+            ) : null}
+            {allowIssuerResize ? (
+              <div
+                className={`invoice-doc-company-resize-handle${isResizingIssuerWidth ? ' active' : ''}`}
+                role="presentation"
+                aria-hidden="true"
+                onPointerDown={handleIssuerResizePointerDown}
+                onPointerMove={handleIssuerResizePointerMove}
+                onPointerUp={finishIssuerResize}
+                onPointerCancel={finishIssuerResize}
+              />
+            ) : null}
           </div>
         </div>
 
         <div className="invoice-chip-row">
-          <span className="invoice-chip">{isReceipt ? '回収済' : '未回収'}</span>
-          <span className="invoice-chip">{lines.length} 明細</span>
-          <span className="invoice-chip">税率 {Math.round((config.defaultTaxRate || 0.1) * 100)}%</span>
+          {/* <span className="invoice-chip">{isReceipt ? '回収済' : '未回収'}</span> */}
+          {/* <span className="invoice-chip">{lines.length} 明細</span> */}
+          {/* <span className="invoice-chip">税率 {Math.round((config.defaultTaxRate || 0.1) * 100)}%</span> */}
         </div>
 
         <table className="invoice-table">

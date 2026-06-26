@@ -65,6 +65,9 @@ export interface UpdateProjectHeaderInput {
   defaultRemarks: string;
   issuerBoxOffsetX: number;
   issuerBoxOffsetY: number;
+  issuerBoxWidth: number;
+  stampOffsetX: number;
+  stampOffsetY: number;
   status: Project['status'];
 }
 
@@ -104,6 +107,9 @@ export interface CreateProjectInput {
   defaultRemarks: string;
   issuerBoxOffsetX: number;
   issuerBoxOffsetY: number;
+  issuerBoxWidth: number;
+  stampOffsetX: number;
+  stampOffsetY: number;
 }
 
 export interface CreateServiceLineInput {
@@ -213,6 +219,9 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
       project.defaultRemarks,
       project.issuerBoxOffsetX,
       project.issuerBoxOffsetY,
+      project.issuerBoxWidth,
+      project.stampOffsetX,
+      project.stampOffsetY,
       project.status,
       project.createdAt,
       project.updatedAt
@@ -399,6 +408,9 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
       input.defaultRemarks,
       input.issuerBoxOffsetX,
       input.issuerBoxOffsetY,
+      input.issuerBoxWidth,
+      input.stampOffsetX,
+      input.stampOffsetY,
       input.status,
       now
     ]);
@@ -422,6 +434,9 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
       defaultRemarks: input.defaultRemarks,
       issuerBoxOffsetX: input.issuerBoxOffsetX,
       issuerBoxOffsetY: input.issuerBoxOffsetY,
+      issuerBoxWidth: input.issuerBoxWidth,
+      stampOffsetX: input.stampOffsetX,
+      stampOffsetY: input.stampOffsetY,
       status: input.status,
       updatedAt: now
     };
@@ -667,6 +682,9 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       input.defaultRemarks,
       input.issuerBoxOffsetX,
       input.issuerBoxOffsetY,
+      input.issuerBoxWidth,
+      input.stampOffsetX,
+      input.stampOffsetY,
       'draft',
       now,
       now
@@ -689,6 +707,9 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       defaultRemarks: input.defaultRemarks,
       issuerBoxOffsetX: input.issuerBoxOffsetX,
       issuerBoxOffsetY: input.issuerBoxOffsetY,
+      issuerBoxWidth: input.issuerBoxWidth,
+      stampOffsetX: input.stampOffsetX,
+      stampOffsetY: input.stampOffsetY,
       status: 'draft',
       createdAt: now,
       updatedAt: now
