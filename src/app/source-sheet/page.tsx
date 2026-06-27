@@ -89,8 +89,9 @@ export default async function SourceSheetPage({
         <p className="eyebrow" style={{ marginBottom: 8 }}>
           KONOYUBI CONNECT
         </p>
-        <h3 className="page-title-static" style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#5f143b" }}>
+        <h3 className="page-title-static" style={{ margin: 0, fontSize: 18, lineHeight: 1.4, color: "#5f143b" }}>
           Source スプレッドシート設定
+
         </h3>
         <p style={{ margin: '12px 0 0' }}>
           `konoyubi` からこのページを開けば、source スプレッドシート新規作成をこのアプリで行えます。

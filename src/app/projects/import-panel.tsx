@@ -1,7 +1,7 @@
 'use client';
 
-import { CSSProperties, useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { CSSProperties, useEffect, useState, useTransition } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type GoogleSheetSetting } from '../../types';
 import type { KonoyubiIssuerSeed } from '../../lib/konoyubi/build-source-sheet-auth-url';
 
@@ -39,6 +39,7 @@ export function ImportPanel({
   oauthReturnPath?: string;
   issuerValues?: KonoyubiIssuerSeed | null;
 }) {
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [savePending, startSaveTransition] = useTransition();
@@ -67,6 +68,18 @@ export function ImportPanel({
   const hasSourceSpreadsheet = Boolean(setting);
   const hasSpreadsheetTitle = form.spreadsheetTitle.trim().length > 0;
   const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
+
+  useEffect(() => {
+    if (pathname !== '/source-sheet') {
+      return;
+    }
+
+    if (initialGoogleSheetStatus !== 'success' || !setting) {
+      return;
+    }
+
+    router.replace('/projects');
+  }, [initialGoogleSheetStatus, pathname, router, setting]);
 
   async function saveSetting() {
     setMessage('');

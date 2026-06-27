@@ -113,7 +113,10 @@ export default async function ProjectsPage({
           initialSpreadsheetTitle={selectedGoogleSpreadsheetTitle}
         />
         {/* <p className="eyebrow">INVOICE WORKBENCH</p> */}
-        <h1 className="page-title-static">スプシで請求書</h1>
+        {/* <h1 className="page-title-static">スプシで請求書</h1> */}
+        <h3 className="page-title-static" style={{ margin: 0, fontSize: 18, lineHeight: 1.4, color: "#5f143b" }}>
+          スプシで請求書
+        </h3>
         {/* <p>
           利用者ごとの未回収確認、請求対象の選択、明細編集、プレビュー、CSV 書き出しを一つの流れで扱います。
         </p> */}
