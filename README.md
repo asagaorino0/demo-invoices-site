@@ -55,6 +55,7 @@ Google Sheets を正本にする運用なら、まずは Google Sheets 用の en
 ```env
 GOOGLE_SERVICE_ACCOUNT_EMAIL=service-account@your-project.iam.gserviceaccount.com
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_PROJECT_ID=your-firebase-project-id
 GOOGLE_CLIENT_ID=xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/google/callback
@@ -81,6 +82,8 @@ POSTGRES_SSL_MODE=require
 - スプレッドシートの所有者はお客様のGoogleアカウントのままで問題ありません
 - お客様には、対象シートをサービスアカウントのメールアドレスへ `編集者` として共有してもらいます
 - デプロイのたびにお客様へ再承認を求める方式ではありません
+- `google_sheet_settings` は PostgreSQL が無い場合、まず Firestore 保存を試します
+- Firestore を使う場合は `FIREBASE_PROJECT_ID` を設定してください。未設定でも `GOOGLE_SERVICE_ACCOUNT_EMAIL` から推測できるときは自動推測します
 - PostgreSQL を使う場合、接続先は Azure 固定ではありません
 - DB 名は `konoyubi_invoices` のような `snake_case` を推奨します
 - 履歴シート名は `/projects` の `Source スプレッドシート` 設定で指定できます。未入力時は `history` を使います

@@ -1,4 +1,9 @@
 import type { GoogleSheetSetting } from '../../types';
+import {
+  getGoogleSheetSettingFromFirestore,
+  listGoogleSheetSettingsFromFirestore,
+  upsertGoogleSheetSettingToFirestore
+} from '../firestore/google-sheet-settings';
 import { readLocalStore, writeLocalStore } from '../local-store';
 import { getDb, type DatabaseClient } from './client';
 
@@ -31,7 +36,12 @@ export async function getGoogleSheetSetting(settingKey: string): Promise<GoogleS
     );
     return result.rows[0] || null;
   } catch (error) {
-    if (!shouldUseLocalStore(error)) throw error;
+    if (!shouldFallbackToFirestoreOrLocal(error)) throw error;
+    try {
+      return await getGoogleSheetSettingFromFirestore(settingKey);
+    } catch (firestoreError) {
+      if (!shouldUseLocalStore(firestoreError)) throw firestoreError;
+    }
     const store = await readLocalStore();
     return store.googleSheetSettings.find((item) => item.settingKey === settingKey) || null;
   }
@@ -56,7 +66,12 @@ export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
     );
     return result.rows;
   } catch (error) {
-    if (!shouldUseLocalStore(error)) throw error;
+    if (!shouldFallbackToFirestoreOrLocal(error)) throw error;
+    try {
+      return await listGoogleSheetSettingsFromFirestore();
+    } catch (firestoreError) {
+      if (!shouldUseLocalStore(firestoreError)) throw firestoreError;
+    }
     const store = await readLocalStore();
     return [...store.googleSheetSettings].sort(
       (a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.settingKey.localeCompare(b.settingKey, 'ja')
@@ -95,7 +110,12 @@ export async function upsertGoogleSheetSetting(
     );
     return result.rows[0];
   } catch (error) {
-    if (!shouldUseLocalStore(error)) throw error;
+    if (!shouldFallbackToFirestoreOrLocal(error)) throw error;
+    try {
+      return await upsertGoogleSheetSettingToFirestore(input);
+    } catch (firestoreError) {
+      if (!shouldUseLocalStore(firestoreError)) throw firestoreError;
+    }
     const store = await readLocalStore();
     const now = new Date().toISOString();
     const existing = store.googleSheetSettings.find((item) => item.settingKey === input.settingKey);
@@ -145,10 +165,17 @@ async function ensureGoogleSheetSettingsTable(db: DatabaseClient): Promise<void>
 function shouldUseLocalStore(error: unknown): boolean {
   const message = String(error || '');
   return (
+    message.includes('Firestore config is not available') ||
     message.includes('PostgreSQL client is not ready') ||
     message.includes('DATABASE_URL is not configured') ||
+    message.includes('read-only file system') ||
+    message.includes('EROFS') ||
     message.includes('ENOTFOUND') ||
     message.includes('ECONNREFUSED') ||
     message.includes('getaddrinfo')
   );
+}
+
+function shouldFallbackToFirestoreOrLocal(error: unknown): boolean {
+  return shouldUseLocalStore(error);
 }
