@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, SVGProps } from 'react';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -28,6 +28,16 @@ interface ProjectEditorProps {
 }
 
 type ReorderTab = 'uncollected' | 'collected';
+type InvoiceRecipientMode = 'customer' | 'company' | 'facility' | 'custom';
+
+const invoiceDateModeOptions: Array<{
+  value: Project['defaultInvoiceDateMode'];
+  label: string;
+}> = [
+    { value: 'visit', label: '訪問日' },
+    { value: 'monthEnd', label: '月末' },
+    { value: 'custom', label: '日付指定' }
+  ];
 
 function reorderIdsByPlacement(
   ids: string[],
@@ -117,6 +127,100 @@ function buildGlobalDisplayOrderIds(
     ...orderedSelectionIds.filter((lineId) => allLineIds.includes(lineId)),
     ...allLineIds.filter((lineId) => !orderedSelectionIds.includes(lineId))
   ];
+}
+
+function buildInvoiceRecipient(
+  form: {
+    customerName: string;
+    companyName: string;
+    facilityName: string;
+    invoiceRecipient: string;
+  },
+  mode: InvoiceRecipientMode
+): string {
+  if (mode === 'customer') {
+    return form.customerName.trim() ? `${form.customerName.trim()} 様` : '';
+  }
+
+  if (mode === 'company') {
+    return form.companyName.trim() ? `${form.companyName.trim()} 御中` : '';
+  }
+
+  if (mode === 'facility') {
+    return form.facilityName.trim() ? `${form.facilityName.trim()} 御中` : '';
+  }
+
+  return form.invoiceRecipient.trim();
+}
+
+function buildInvoiceRecipientOptions(form: {
+  customerName: string;
+  companyName: string;
+  facilityName: string;
+}): Array<{
+  value: InvoiceRecipientMode;
+  label: string;
+}> {
+  const options: Array<{
+    value: InvoiceRecipientMode;
+    label: string;
+  }> = [];
+
+  if (form.customerName.trim()) {
+    options.push({ value: 'customer', label: `${form.customerName.trim()} 様` });
+  }
+
+  if (form.companyName.trim()) {
+    options.push({ value: 'company', label: `${form.companyName.trim()} 御中` });
+  }
+
+  if (form.facilityName.trim()) {
+    options.push({ value: 'facility', label: `${form.facilityName.trim()} 御中` });
+  }
+
+  options.push({ value: 'custom', label: 'その他' });
+
+  return options;
+}
+
+function inferInvoiceRecipientMode(form: {
+  customerName: string;
+  companyName: string;
+  facilityName: string;
+  invoiceRecipient: string;
+}): InvoiceRecipientMode {
+  if (form.customerName.trim() && form.invoiceRecipient.trim() === `${form.customerName.trim()} 様`) {
+    return 'customer';
+  }
+
+  if (form.companyName.trim() && form.invoiceRecipient.trim() === `${form.companyName.trim()} 御中`) {
+    return 'company';
+  }
+
+  if (form.facilityName.trim() && form.invoiceRecipient.trim() === `${form.facilityName.trim()} 御中`) {
+    return 'facility';
+  }
+
+  return 'custom';
+}
+
+function PlusIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+      style={{ height: 36, width: 36, ...props.style }}
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
 }
 
 export function ProjectEditor({
@@ -209,6 +313,15 @@ export function ProjectEditor({
     serviceLines.length === 1 ? serviceLines[0]?.id || '' : ''
   );
   const [lineEditorDialogOpen, setLineEditorDialogOpen] = useState(false);
+  const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false);
+  const [invoiceRecipientMode, setInvoiceRecipientMode] = useState<InvoiceRecipientMode>(() =>
+    inferInvoiceRecipientMode({
+      customerName: project.customerName,
+      companyName: project.companyName,
+      facilityName: project.facilityName,
+      invoiceRecipient: project.invoiceRecipient
+    })
+  );
   const [editingLineOverride, setEditingLineOverride] = useState<ServiceLine | null>(null);
   const editingLine = useMemo(
     () =>
@@ -236,6 +349,7 @@ export function ProjectEditor({
       }
       : null
   );
+  const invoiceRecipientOptions = buildInvoiceRecipientOptions(form);
   const isHeaderDirty =
     form.customerName !== savedHeader.customerName ||
     form.subject !== savedHeader.subject ||
@@ -437,7 +551,23 @@ export function ProjectEditor({
     setForm(nextHeader);
     setSavedHeader(nextHeader);
     setSheetSyncStatus(project.status);
+    setInvoiceRecipientMode(
+      inferInvoiceRecipientMode({
+        customerName: project.customerName,
+        companyName: project.companyName,
+        facilityName: project.facilityName,
+        invoiceRecipient: project.invoiceRecipient
+      })
+    );
   }, [project]);
+
+  useEffect(() => {
+    if (invoiceRecipientOptions.some((option) => option.value === invoiceRecipientMode)) {
+      return;
+    }
+
+    setInvoiceRecipientMode(invoiceRecipientOptions[0]?.value || 'custom');
+  }, [invoiceRecipientMode, invoiceRecipientOptions]);
 
   useEffect(() => {
     setReceiptDate(resolvedReceiptDate);
@@ -489,6 +619,30 @@ export function ProjectEditor({
       setEditingLineOverride(null);
     }
   }, [editingLineOverride, serviceLines]);
+
+  useEffect(() => {
+    function handleOpenUserInfoDialog() {
+      setUserInfoDialogOpen(true);
+    }
+
+    window.addEventListener('open-user-info-dialog', handleOpenUserInfoDialog);
+    return () => window.removeEventListener('open-user-info-dialog', handleOpenUserInfoDialog);
+  }, []);
+
+  useEffect(() => {
+    if (!userInfoDialogOpen) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setUserInfoDialogOpen(false);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [userInfoDialogOpen]);
 
   useEffect(() => {
     const serviceLineIds = new Set(serviceLines.map((line) => line.id));
@@ -583,6 +737,109 @@ export function ProjectEditor({
 
   function formatEditingLineLabel(line: ServiceLine): string {
     return `${line.serviceDate || '日付未設定'} / ${line.serviceName}`;
+  }
+
+  function renderUserInfoFields() {
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        {/* <div className="note" style={{ margin: 0 }}>
+          利用者IDは登録時に自動採番されます。形式: 会社2桁 / 施設2桁 / 利用者3桁
+        </div> */}
+        <label style={{ fontSize: 12, color: '#666' }}>氏名</label>
+        <input
+          placeholder="利用者名"
+          value={form.customerName}
+          onChange={(event) => setForm((current) => ({ ...current, customerName: event.target.value }))}
+          style={inputStyle}
+        />
+        <label style={{ fontSize: 12, color: '#666' }}>請求日タイプ</label>
+        <div className="choice-chip-row" role="group" aria-label="請求日タイプ">
+          {invoiceDateModeOptions.map((option) => {
+            const active = form.defaultInvoiceDateMode === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`choice-chip ${active ? 'active' : ''}`}
+                aria-pressed={active}
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    defaultInvoiceDateMode: option.value
+                  }))
+                }
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        <label style={{ fontSize: 12, color: '#666' }}>会社名</label>
+        <input
+          placeholder="会社名を入力してください"
+          value={form.companyName}
+          onChange={(event) => setForm((current) => ({ ...current, companyName: event.target.value }))}
+          style={inputStyle}
+        />
+        <label style={{ fontSize: 12, color: '#666' }}>施設名</label>
+        <input
+          placeholder="空欄可"
+          value={form.facilityName}
+          onChange={(event) => setForm((current) => ({ ...current, facilityName: event.target.value }))}
+          style={inputStyle}
+        />
+        <label style={{ fontSize: 12, color: '#666' }}>請求先宛先</label>
+        <div className="choice-chip-row" role="group" aria-label="請求先宛先">
+          {invoiceRecipientOptions.map((option) => {
+            const active = invoiceRecipientMode === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`choice-chip ${active ? 'active' : ''}`}
+                aria-pressed={active}
+                onClick={() => {
+                  setInvoiceRecipientMode(option.value);
+                  if (option.value !== 'custom') {
+                    setForm((current) => ({
+                      ...current,
+                      invoiceRecipient: buildInvoiceRecipient(current, option.value)
+                    }));
+                  }
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        {invoiceRecipientMode === 'custom' ? (
+          <input
+            placeholder="請求先"
+            value={form.invoiceRecipient}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, invoiceRecipient: event.target.value }))
+            }
+            style={inputStyle}
+          />
+        ) : null}
+        <label style={{ fontSize: 12, color: '#666' }}>件名・・・</label>
+        <input
+          placeholder="件名"
+          value={form.subject}
+          onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
+          style={inputStyle}
+        />
+        <label style={{ fontSize: 12, color: '#666' }}>備考</label>
+        <textarea
+          placeholder="備考"
+          value={form.defaultRemarks}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, defaultRemarks: event.target.value }))
+          }
+        />
+      </div>
+    );
   }
 
   async function saveHeader(options?: { silent?: boolean }): Promise<boolean> {
@@ -1318,9 +1575,9 @@ export function ProjectEditor({
             type="button"
             onClick={() => void createNewLine({ openEditor: true })}
             aria-label="明細を追加"
-            style={{ minWidth: compact ? 52 : 56, paddingInline: 0 }}
+            style={{ minWidth: 58, paddingInline: 0 }}
           >
-            ＋
+            <PlusIcon className="h-4 w-4" />
           </button>
         </div>
 
@@ -1566,7 +1823,7 @@ export function ProjectEditor({
                 </label>
               </div>
               <label>
-                <div>備考</div>
+                <div>備考(請求書や領収書に表示されます)</div>
                 <input
                   value={lineForm.remarks}
                   onChange={(event) => setLineForm((current) => current && ({ ...current, remarks: event.target.value }))}
@@ -1689,7 +1946,7 @@ export function ProjectEditor({
                     : undefined
                 }
               >
-                変更を保存
+                保存
               </button>
             </div>
           </>
@@ -1701,38 +1958,38 @@ export function ProjectEditor({
   return (
     <>
       <section className="workbench-stage">
-        <article className="card workbench-tab-card">
-          <div className="workbench-tabbar">
-            <button
-              className={`workbench-tab${activeTab === 'uncollected' ? ' active' : ''}`}
-              type="button"
-              onClick={() => setActiveTab('uncollected')}
-            >
-              未回収
-            </button>
-            <button
-              className={`workbench-tab${activeTab === 'invoice' ? ' active' : ''}`}
-              type="button"
-              onClick={() => setActiveTab('invoice')}
-            >
-              請求書
-            </button>
-            <button
-              className={`workbench-tab${activeTab === 'collected' ? ' active' : ''}`}
-              type="button"
-              onClick={() => setActiveTab('collected')}
-            >
-              回収済
-            </button>
-            <button
-              className={`workbench-tab${activeTab === 'receipt' ? ' active' : ''}`}
-              type="button"
-              onClick={() => setActiveTab('receipt')}
-            >
-              領収書
-            </button>
-          </div>
-        </article>
+        {/* <article className="card workbench-tab-card"> */}
+        <div className="workbench-tabbar">
+          <button
+            className={`workbench-tab${activeTab === 'uncollected' ? ' active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('uncollected')}
+          >
+            未回収
+          </button>
+          <button
+            className={`workbench-tab${activeTab === 'invoice' ? ' active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('invoice')}
+          >
+            請求書
+          </button>
+          <button
+            className={`workbench-tab${activeTab === 'collected' ? ' active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('collected')}
+          >
+            回収済
+          </button>
+          <button
+            className={`workbench-tab${activeTab === 'receipt' ? ' active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('receipt')}
+          >
+            領収書
+          </button>
+        </div>
+        {/* </article> */}
 
         <article className="card workbench-list-card">
           {activeTab === 'uncollected' ? (
@@ -2103,110 +2360,10 @@ export function ProjectEditor({
         </article>
       </section>
 
-      <section className="workbench-detail-grid">
+      {/* <section className="workbench-detail-grid">
         <article className="card">
           <h2>利用者情報</h2>
-          <div style={{ display: 'grid', gap: 12 }}>
-            <label>
-              <div>利用者名</div>
-              <input
-                value={form.customerName}
-                onChange={(event) => setForm((current) => ({ ...current, customerName: event.target.value }))}
-                style={inputStyle}
-              />
-            </label>
-            <label>
-              <div>請求先</div>
-              <input
-                value={form.invoiceRecipient}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, invoiceRecipient: event.target.value }))
-                }
-                style={inputStyle}
-              />
-            </label>
-            <label>
-              <div>施設名</div>
-              <input
-                value={form.facilityName}
-                onChange={(event) => setForm((current) => ({ ...current, facilityName: event.target.value }))}
-                style={inputStyle}
-              />
-            </label>
-            <label>
-              <div>会社名</div>
-              <input
-                value={form.companyName}
-                onChange={(event) => setForm((current) => ({ ...current, companyName: event.target.value }))}
-                style={inputStyle}
-              />
-            </label>
-            {isReceiptContext ? (
-              <label>
-                <div>領収日</div>
-                <input
-                  type="date"
-                  value={receiptDate}
-                  onChange={(event) => setReceiptDate(event.target.value)}
-                  style={inputStyle}
-                />
-              </label>
-            ) : (
-              <>
-                <label>
-                  <div>件名</div>
-                  <input
-                    value={form.subject}
-                    onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
-                    style={inputStyle}
-                  />
-                </label>
-                <label>
-                  <div>請求日タイプ</div>
-                  <select
-                    value={form.defaultInvoiceDateMode}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        defaultInvoiceDateMode: event.target.value as Project['defaultInvoiceDateMode']
-                      }))
-                    }
-                    style={inputStyle}
-                  >
-                    <option value="visit">{getProjectInvoiceDateModeLabel('visit')}</option>
-                    <option value="monthEnd">{getProjectInvoiceDateModeLabel('monthEnd')}</option>
-                    <option value="custom">{getProjectInvoiceDateModeLabel('custom')}</option>
-                  </select>
-                </label>
-                <label>
-                  <div>請求日</div>
-                  <input
-                    type="date"
-                    value={displayedIssueDate}
-                    onChange={(event) => setForm((current) => ({ ...current, issueDate: event.target.value }))}
-                    style={inputStyle}
-                    disabled={form.defaultInvoiceDateMode !== 'custom'}
-                  />
-                </label>
-              </>
-            )}
-            <label>
-              <div>ステータス</div>
-              <div style={{ ...inputStyle, display: 'flex', alignItems: 'center' }}>
-                {getProjectStatusLabel(form.status)}
-              </div>
-            </label>
-            <label>
-              <div>備考</div>
-              <textarea
-                value={form.defaultRemarks}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, defaultRemarks: event.target.value }))
-                }
-                style={{ ...inputStyle, minHeight: 96, resize: 'vertical' }}
-              />
-            </label>
-          </div>
+          {renderUserInfoFields()}
           <div
             className="note"
             style={{ marginTop: 18, background: '#fff8fb', color: '#7b5b6d' }}
@@ -2222,13 +2379,13 @@ export function ProjectEditor({
             >
               {sheetSyncPending ? 'スプレッドシートへ保存中...' : 'スプレッドシートへ変更を保存'}
             </button>
-            {/* <button className="button-link secondary" type="button" onClick={downloadProjectCsv}>
+            <button className="button-link secondary" type="button" onClick={downloadProjectCsv}>
               CSVを書き出す
-            </button> */}
+            </button>
           </div>
         </article>
 
-        {/* <article
+        <article
           className="card"
           style={
             isLineDirty
@@ -2241,8 +2398,8 @@ export function ProjectEditor({
         >
           <h2>案件情報</h2>
           {renderLineEditorContent()}
-        </article> */}
-      </section>
+        </article>
+      </section> */}
 
       {lineEditorDialogOpen ? (
         <div className="dialog-backdrop" role="presentation" onClick={() => setLineEditorDialogOpen(false)}>
@@ -2271,6 +2428,48 @@ export function ProjectEditor({
         </div>
       ) : null}
 
+      {userInfoDialogOpen ? (
+        <div className="dialog-backdrop" role="presentation" onClick={() => setUserInfoDialogOpen(false)}>
+          <div
+            className="dialog-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="利用者情報"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="dialog-header">
+              <div>
+                <p className="eyebrow" style={{ marginBottom: 6 }}>
+                  USER INFO
+                </p>
+                <h2 className="dialog-title">利用者情報</h2>
+              </div>
+              <button
+                type="button"
+                className="dialog-close-button"
+                aria-label="ダイアログを閉じる"
+                onClick={() => setUserInfoDialogOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            {renderUserInfoFields()}
+
+            <div className="hero-actions" style={{ marginTop: 18 }}>
+              <button
+                className={`button-link ${sheetSyncButtonStyle}`}
+                type="button"
+                onClick={() => void syncProjectToSheet()}
+                disabled={sheetSyncPending || !canSyncToSheet}
+              >
+                {sheetSyncPending ? '利用者情報を保存中...' : '利用者情報を保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {message ? <div className="note">{message}</div> : null}
       {error ? <div className="note" style={{ background: '#f7dfd7', color: '#7a2f1b' }}>{error}</div> : null}
     </>
@@ -2283,8 +2482,8 @@ function limitMonthGroups(groups: Array<[string, ServiceLine[]]>) {
 
 const inputStyle: CSSProperties = {
   width: '100%',
-  marginTop: 6,
-  padding: '10px 12px',
+  marginBottom: 6,
+  padding: '6px 12px',
   borderRadius: 12,
   border: '1px solid var(--line)',
   background: 'white',

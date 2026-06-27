@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { CSSProperties, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Project } from '../../types';
 
@@ -8,10 +8,10 @@ const invoiceDateModeOptions: Array<{
   value: Project['defaultInvoiceDateMode'];
   label: string;
 }> = [
-  { value: 'visit', label: '訪問日' },
-  { value: 'monthEnd', label: '月末' },
-  { value: 'custom', label: '日付指定' }
-];
+    { value: 'visit', label: '訪問日' },
+    { value: 'monthEnd', label: '月末' },
+    { value: 'custom', label: '日付指定' }
+  ];
 
 type InvoiceRecipientMode = 'customer' | 'company' | 'facility' | 'custom';
 
@@ -106,10 +106,12 @@ export function CreateProjectPanel({
         </>
       )}
       <div style={{ display: 'grid', gap: 12 }}>
-        <div className="note" style={{ margin: 0 }}>
+        {/* <div className="note" style={{ margin: 0 }}>
           利用者IDは登録時に自動採番されます。形式: 会社2桁 / 施設2桁 / 利用者3桁
-        </div>
-        <input placeholder="利用者名" value={form.customerName} onChange={(e) => setForm((c) => ({ ...c, customerName: e.target.value }))} />
+        </div> */}
+        <input placeholder="利用者名" value={form.customerName} onChange={(e) => setForm((c) => ({ ...c, customerName: e.target.value }))}
+          style={inputStyle}
+        />
         <label style={{ fontSize: 12, color: '#666' }}>請求日タイプ</label>
         <div className="choice-chip-row" role="group" aria-label="請求日タイプ">
           {invoiceDateModeOptions.map((option) => {
@@ -128,9 +130,13 @@ export function CreateProjectPanel({
           })}
         </div>
         <label style={{ fontSize: 12, color: '#666' }}>会社名</label>
-        <input placeholder="会社名を入力してください" value={form.companyName} onChange={(e) => setForm((c) => ({ ...c, companyName: e.target.value }))} />
+        <input placeholder="会社名を入力してください" value={form.companyName} onChange={(e) => setForm((c) => ({ ...c, companyName: e.target.value }))}
+          style={inputStyle}
+        />
         <label style={{ fontSize: 12, color: '#666' }}>施設名</label>
-        <input placeholder="空欄可" value={form.facilityName} onChange={(e) => setForm((c) => ({ ...c, facilityName: e.target.value }))} />
+        <input placeholder="空欄可" value={form.facilityName} onChange={(e) => setForm((c) => ({ ...c, facilityName: e.target.value }))}
+          style={inputStyle}
+        />
         <label style={{ fontSize: 12, color: '#666' }}>請求先宛先</label>
         <div className="choice-chip-row" role="group" aria-label="請求先宛先">
           {invoiceRecipientOptions.map((option) => {
@@ -153,6 +159,7 @@ export function CreateProjectPanel({
             placeholder="請求先"
             value={form.invoiceRecipient}
             onChange={(e) => setForm((c) => ({ ...c, invoiceRecipient: e.target.value }))}
+            style={inputStyle}
           />
         ) : (
           // <div className="source-meta" style={{ marginTop: -2 }}>
@@ -161,7 +168,9 @@ export function CreateProjectPanel({
           null
         )}
         <label style={{ fontSize: 12, color: '#666' }}>件名</label>
-        <input placeholder="件名" value={form.subject} onChange={(e) => setForm((c) => ({ ...c, subject: e.target.value }))} />
+        <input placeholder="件名" value={form.subject} onChange={(e) => setForm((c) => ({ ...c, subject: e.target.value }))}
+          style={inputStyle}
+        />
         <label style={{ fontSize: 12, color: '#666' }}>備考</label>
         <textarea placeholder="備考" value={form.defaultRemarks} onChange={(e) => setForm((c) => ({ ...c, defaultRemarks: e.target.value }))} />
       </div>
@@ -244,3 +253,13 @@ function getInvoiceRecipientValidationMessage(mode: InvoiceRecipientMode): strin
 
   return '請求先を入力してください。';
 }
+
+const inputStyle: CSSProperties = {
+  width: '100%',
+  marginBottom: 6,
+  padding: '6px 12px',
+  borderRadius: 12,
+  border: '1px solid var(--line)',
+  background: 'white',
+  font: 'inherit'
+};

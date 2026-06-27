@@ -39,7 +39,7 @@ a {
 .page-shell {
   width: min(1220px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 32px 0 56px;
+  padding: 12px 0 56px;
 }
 
 .hero {
@@ -131,7 +131,7 @@ a {
   width: 42px;
   height: 42px;
   border: 1px solid rgba(150, 21, 95, 0.18);
-  border-radius: 999px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff, #fff8fb);
   color: var(--accent-strong);
   box-shadow: 0 10px 24px rgba(109, 19, 68, 0.08);
@@ -267,6 +267,7 @@ a {
 
 .sidebar-toggle.collapsed {
   left: 0;
+  top: 105px;
   transform: translateX(-10px);
 }
 
@@ -480,8 +481,8 @@ a {
 .workbench-preview-grid,
 .workbench-detail-grid {
   display: grid;
-  gap: 18px;
-  margin-top: 24px;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .workbench-detail-grid {
@@ -502,7 +503,7 @@ a {
   gap: 6px;
   padding: 14px;
   border-radius: 28px;
-  background: #f4dfea;
+  /* background: #f4dfea; */
 }
 
 .workbench-tab {
@@ -542,6 +543,7 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-bottom: 10px;
 }
 
 .choice-chip {

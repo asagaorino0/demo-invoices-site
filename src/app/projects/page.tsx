@@ -6,6 +6,7 @@ import { loadSiteConfig } from '../../lib/site-config';
 import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 import { SourceSheetDialog } from './source-sheet-dialog';
 import { NewUserDialog } from './new-user-dialog';
+import { UserInfoDialogTrigger } from './user-info-dialog-trigger';
 import { WorkbenchLayoutShell } from './workbench-layout-shell';
 
 export const dynamic = 'force-dynamic';
@@ -75,19 +76,25 @@ export default async function ProjectsPage({
     : manualProjectCanOpen
       ? selectedContextGroup
       : null;
-  const totalUncollected = customerGroups.reduce((sum, group) => sum + group.uncollectedCount, 0);
-  const totalCollected = customerGroups.reduce((sum, group) => sum + group.collectedCount, 0);
-  const totalSelected = customerGroups.reduce((sum, group) => sum + group.selectedCount, 0);
+  // const totalUncollected = customerGroups.reduce((sum, group) => sum + group.uncollectedCount, 0);
+  // const totalCollected = customerGroups.reduce((sum, group) => sum + group.collectedCount, 0);
+  // const totalSelected = customerGroups.reduce((sum, group) => sum + group.selectedCount, 0);
 
   return (
     <main className="page-shell">
-      <section className="hero">
+      <section
+        // className="hero"
+        style={{
+          // position: "relative",
+          padding: "0px 24px"
+        }}
+      >
         <SourceSheetDialog initialSetting={selectedGoogleSheetSetting} />
-        <p className="eyebrow">INVOICE WORKBENCH</p>
-        <h1 className="page-title-static">請求書デモ</h1>
-        <p>
+        {/* <p className="eyebrow">INVOICE WORKBENCH</p> */}
+        <h1 className="page-title-static">スプシで請求書</h1>
+        {/* <p>
           利用者ごとの未回収確認、請求対象の選択、明細編集、プレビュー、CSV 書き出しを一つの流れで扱います。
-        </p>
+        </p> */}
         {/* <div className="hero-actions">
           <a className="button-link secondary" href="/invoices.html">
             見本画面を開く
@@ -115,7 +122,7 @@ export default async function ProjectsPage({
 
                 {customerGroups.length === 0 ? (
                   <p style={{ margin: 0 }}>
-                    まだ利用者がありません。まずは CSV を取り込むか、下のフォームから新規利用者を登録してください。
+                    まだ利用者がありません。
                   </p>
                 ) : (
                   <div style={{ display: 'grid', gap: 12 }}>
@@ -197,8 +204,9 @@ export default async function ProjectsPage({
                       : ''}
                   </p>
                 </div>
+                <UserInfoDialogTrigger />
 
-                <div
+                {/* <div
                   style={{
                     display: 'grid',
                     gap: 10,
@@ -208,7 +216,7 @@ export default async function ProjectsPage({
                   <InlineStat label="未回収" value={`${selectedCustomerGroup.uncollectedCount}件`} />
                   <InlineStat label="請求対象" value={`${selectedCustomerGroup.selectedCount}件`} />
                   <InlineStat label="回収済" value={`${selectedCustomerGroup.collectedCount}件`} />
-                </div>
+                </div> */}
               </div>
             </section>
 
@@ -225,6 +233,14 @@ export default async function ProjectsPage({
             <h2 style={{ marginBottom: 10 }}>先にスプレッドシート設定をしてください</h2>
             <p style={{ marginBottom: 0 }}>
               スプレッドシートが未設定の間は、案件一覧や利用者一覧は表示しません。上のカードで設定してから取り込みを進めてください。
+            </p>
+          </section>
+        ) : customerGroups.length === 0 ? (
+          <section className="card">
+            <h2 style={{ marginBottom: 10 }}>次は利用者を追加です</h2>
+            <p style={{ marginBottom: 0 }}>
+              新規にスプレッドシートがGoogleドライブに作成されました。まずは左の
+              `利用者を追加` から最初の利用者を登録してください。
             </p>
           </section>
         ) : (
@@ -291,40 +307,40 @@ function filterProjectsBySelectedSheet(projects: ProjectSummary[], settingUpdate
   return projects.filter((project) => (project.lastImportedAt || '') >= settingUpdatedAt);
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        padding: 16,
-        borderRadius: 18,
-        border: '1px solid #ecd9e3',
-        background: 'rgba(255, 255, 255, 0.84)'
-      }}
-    >
-      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 400, color: '#6d1344' }}>{value}</div>
-    </div>
-  );
-}
+// function StatCard({ label, value }: { label: string; value: string }) {
+//   return (
+//     <div
+//       style={{
+//         padding: 16,
+//         borderRadius: 18,
+//         border: '1px solid #ecd9e3',
+//         background: 'rgba(255, 255, 255, 0.84)'
+//       }}
+//     >
+//       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
+//       <div style={{ fontSize: 22, fontWeight: 400, color: '#6d1344' }}>{value}</div>
+//     </div>
+//   );
+// }
 
-function InlineStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        gap: 12,
-        padding: '12px 14px',
-        borderRadius: 16,
-        border: '1px solid #ecd9e3',
-        background: 'rgba(255,255,255,0.72)'
-      }}
-    >
-      <span style={{ color: 'var(--muted)' }}>{label}</span>
-      <strong style={{ color: '#6d1344' }}>{value}</strong>
-    </div>
-  );
-}
+// function InlineStat({ label, value }: { label: string; value: string }) {
+//   return (
+//     <div
+//       style={{
+//         display: 'flex',
+//         justifyContent: 'space-between',
+//         gap: 12,
+//         padding: '12px 14px',
+//         borderRadius: 16,
+//         border: '1px solid #ecd9e3',
+//         background: 'rgba(255,255,255,0.72)'
+//       }}
+//     >
+//       <span style={{ color: 'var(--muted)' }}>{label}</span>
+//       <strong style={{ color: '#6d1344' }}>{value}</strong>
+//     </div>
+//   );
+// }
 
 function StatusPill({ status }: { status: ProjectSummary['status'] }) {
   const label = getProjectStatusLabel(status);
