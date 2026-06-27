@@ -4,7 +4,8 @@ import {
   createGoogleSheetTargetWithUserAccessToken,
   exchangeGoogleOAuthCode,
   grantSpreadsheetAccessToServiceAccount,
-  verifyGoogleSheetTarget
+  verifyGoogleSheetTarget,
+  type IssuerSheetSeed
 } from '../../../../lib/google-sheets';
 import { upsertGoogleSheetSetting } from '../../../../lib/store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../../types';
@@ -16,10 +17,27 @@ const OAUTH_STATE_COOKIE = 'google_oauth_source_sheet_state';
 const OAUTH_PAYLOAD_COOKIE = 'google_oauth_source_sheet_payload';
 
 function redirectToProjects(request: NextRequest, status: 'success' | 'error', message: string) {
-  const url = new URL('/projects', request.url);
+  return redirectToPath(request, '/projects', status, message);
+}
+
+function redirectToPath(
+  request: NextRequest,
+  returnPath: string,
+  status: 'success' | 'error',
+  message: string
+) {
+  const url = new URL(normalizeReturnPath(returnPath), request.url);
   url.searchParams.set('googleSheetStatus', status);
   url.searchParams.set('googleSheetMessage', message);
   return NextResponse.redirect(url);
+}
+
+function normalizeReturnPath(input: string): string {
+  const trimmed = String(input || '').trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
+    return '/projects';
+  }
+  return trimmed;
 }
 
 export async function GET(request: NextRequest) {
@@ -44,7 +62,10 @@ export async function GET(request: NextRequest) {
       newFolderName?: string;
       sheetName?: string;
       historySheetName?: string;
+      returnPath?: string;
+      issuerValues?: IssuerSheetSeed;
     };
+    const returnPath = normalizeReturnPath(String(payload.returnPath || '').trim());
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || '';
     const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
 
@@ -66,13 +87,20 @@ export async function GET(request: NextRequest) {
     }
 
     const tokens = await exchangeGoogleOAuthCode({ code, redirectUri });
+    console.log('[google/callback] create payload', {
+      spreadsheetTitle: String(payload.spreadsheetTitle || ''),
+      sheetName: String(payload.sheetName || ''),
+      historySheetName: String(payload.historySheetName || ''),
+      issuerValues: payload.issuerValues
+    });
     const created = await createGoogleSheetTargetWithUserAccessToken({
       accessToken: tokens.accessToken,
       title: String(payload.spreadsheetTitle || ''),
       destinationFolderId: extractDriveFolderId(String(payload.destinationFolderUrlOrId || '')),
       newFolderName: String(payload.newFolderName || ''),
       sheetName: String(payload.sheetName || ''),
-      historySheetName: String(payload.historySheetName || '')
+      historySheetName: String(payload.historySheetName || ''),
+      issuerValues: payload.issuerValues
     });
 
     await grantSpreadsheetAccessToServiceAccount({
@@ -100,11 +128,12 @@ export async function GET(request: NextRequest) {
       spreadsheetUrl: created.spreadsheetUrl
     });
 
-    return redirectToProjects(request, 'success', '新規スプレッドシートを作成して設定しました。');
+    return redirectToPath(request, returnPath, 'success', '新規スプレッドシートを作成して設定しました。');
   } catch (error) {
     console.error('[google/callback] failed', error);
-    return redirectToProjects(
+    return redirectToPath(
       request,
+      '/projects',
       'error',
       error instanceof Error ? error.message : 'Google スプレッドシートの作成に失敗しました。'
     );

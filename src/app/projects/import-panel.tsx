@@ -3,20 +3,9 @@
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type GoogleSheetSetting } from '../../types';
+import type { KonoyubiIssuerSeed } from '../../lib/konoyubi/build-source-sheet-auth-url';
 
 type SourceSheetMode = 'existing' | 'create';
-
-interface ImportResult {
-  importId: string;
-  projectCount: number;
-  lineCount: number;
-  selectionCount: number;
-  warnings: Array<{ code: string; message: string; rowNumber?: number }>;
-}
-
-interface ImportErrorResult {
-  message?: string;
-}
 
 interface SaveSettingResult {
   message?: string;
@@ -29,16 +18,29 @@ interface SaveSettingResult {
   };
 }
 
+interface ExistingSettingPayload {
+  spreadsheetUrlOrId: string;
+  sheetName: string;
+  historySheetName: string;
+}
+
 export function ImportPanel({
   initialSetting,
-  withinDialog = false
+  initialSpreadsheetTitle,
+  withinDialog = false,
+  initialMode,
+  oauthReturnPath,
+  issuerValues
 }: {
   initialSetting: GoogleSheetSetting | null;
+  initialSpreadsheetTitle?: string | null;
   withinDialog?: boolean;
+  initialMode?: SourceSheetMode | null;
+  oauthReturnPath?: string;
+  issuerValues?: KonoyubiIssuerSeed | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [sheetPending, startSheetTransition] = useTransition();
   const [savePending, startSaveTransition] = useTransition();
   const initialGoogleSheetStatus = searchParams.get('googleSheetStatus');
   const initialGoogleSheetMessage = searchParams.get('googleSheetMessage') || '';
@@ -59,34 +61,11 @@ export function ImportPanel({
     sheetName: initialSetting?.sheetName || 'invoices',
     historySheetName: initialSetting?.historySheetName || 'history'
   });
-  const [mode, setMode] = useState<SourceSheetMode | null>(withinDialog ? null : 'existing');
+  const [mode, setMode] = useState<SourceSheetMode | null>(
+    initialMode === undefined ? (withinDialog ? null : 'existing') : initialMode
+  );
   const hasSourceSpreadsheet = Boolean(setting);
   const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
-
-  async function importFromGoogleSheet() {
-    setMessage('');
-    setError('');
-
-    const response = await fetch('/api/imports/sheet', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ settingKey })
-    });
-
-    const data = (await response.json()) as ImportResult | ImportErrorResult;
-
-    if (!response.ok) {
-      const errorData = data as ImportErrorResult;
-      setError(errorData.message || 'Google スプレッドシートの取込に失敗しました。');
-      return;
-    }
-
-    setMessage('スプレッドシート取込完了！');
-
-    startSheetTransition(() => {
-      router.refresh();
-    });
-  }
 
   async function saveSetting() {
     setMessage('');
@@ -94,15 +73,46 @@ export function ImportPanel({
     setSettingMessage('');
     setSettingError('');
 
-    if (!form.spreadsheetUrlOrId.trim()) {
-      setSettingError('既存のスプレッドシート URL または ID を入力してください。');
+    const payload = getExistingSettingPayload();
+    if (!payload) {
       return;
     }
 
-    if (!form.sheetName.trim()) {
-      setSettingError('シート名を入力してください。');
+    const response = await persistExistingSetting(payload);
+    if (!response) {
       return;
     }
+
+    setSettingMessage('スプレッドシート設定を保存しました。表示は source スプレッドシートを直接参照します。');
+    startSaveTransition(() => {
+      router.refresh();
+    });
+  }
+
+  function getExistingSettingPayload(override?: Partial<ExistingSettingPayload>): ExistingSettingPayload | null {
+    const spreadsheetUrlOrId = String(override?.spreadsheetUrlOrId ?? form.spreadsheetUrlOrId).trim();
+    const sheetName = String(override?.sheetName ?? form.sheetName).trim();
+    const historySheetName = String(override?.historySheetName ?? form.historySheetName).trim() || 'history';
+
+    if (!spreadsheetUrlOrId) {
+      setSettingError('既存のスプレッドシート URL または ID を入力してください。');
+      return null;
+    }
+
+    if (!sheetName) {
+      setSettingError('シート名を入力してください。');
+      return null;
+    }
+
+    return {
+      spreadsheetUrlOrId,
+      sheetName,
+      historySheetName
+    };
+  }
+
+  async function persistExistingSetting(payload: ExistingSettingPayload): Promise<GoogleSheetSetting | null> {
+    const { spreadsheetUrlOrId, sheetName, historySheetName } = payload;
 
     const response = await fetch('/api/google-sheet-settings', {
       method: 'POST',
@@ -110,9 +120,9 @@ export function ImportPanel({
       body: JSON.stringify({
         settingKey,
         spreadsheetTitle: form.spreadsheetTitle,
-        spreadsheetUrlOrId: form.spreadsheetUrlOrId,
-        sheetName: form.sheetName,
-        historySheetName: form.historySheetName
+        spreadsheetUrlOrId,
+        sheetName,
+        historySheetName
       })
     });
 
@@ -120,17 +130,18 @@ export function ImportPanel({
 
     if (!response.ok || !data.setting) {
       setSettingError(data.message || `スプレッドシート設定を保存できませんでした。(${response.status})`);
-      return;
+      return null;
     }
 
     setSetting(data.setting);
     setForm((current) => ({
       ...current,
       spreadsheetTitle: '',
-      spreadsheetUrlOrId: data.created?.spreadsheetUrl || data.setting?.spreadsheetId || current.spreadsheetUrlOrId
+      spreadsheetUrlOrId: data.created?.spreadsheetUrl || data.setting?.spreadsheetId || spreadsheetUrlOrId,
+      sheetName,
+      historySheetName
     }));
-    setSettingMessage('スプレッドシート設定を保存しました。取り込みを開始します...');
-    await importFromGoogleSheet();
+    return data.setting;
   }
 
   function startGoogleOauthCreate() {
@@ -159,6 +170,10 @@ export function ImportPanel({
       sheetName: form.sheetName,
       historySheetName: form.historySheetName
     });
+    appendIssuerValues(params, issuerValues);
+    if (oauthReturnPath) {
+      params.set('returnPath', oauthReturnPath);
+    }
     window.location.href = `/api/google/auth?${params.toString()}`;
   }
 
@@ -182,7 +197,9 @@ export function ImportPanel({
           </button>
           <button type="button" className="dialog-choice-button" onClick={() => setMode('create')}>
             <span className="dialog-choice-title">新規スプレッドシートを作成</span>
-            <span className="dialog-choice-copy">Google 認証後に Drive 上へ新しいスプレッドシートを作成します。</span>
+            <span className="dialog-choice-copy">
+              Google 認証後に Drive 上へ新しいスプレッドシートを作成し、発行者シートも用意します。
+            </span>
           </button>
         </div>
       ) : null}
@@ -292,26 +309,37 @@ export function ImportPanel({
         </div>
       ) : null}
 
-      <div className="source-meta" style={{ marginTop: 12 }}>
-        {setting
-          ? `現在の保存先: ${setting.sheetName} / ${setting.spreadsheetId}`
-          : '取込元の source スプレッドシートは未設定です。今表示中の案件は過去に保存済みのデータです。'}
-      </div>
       <div className="source-meta" style={{ marginTop: 8 }}>
-        新規作成では Google 認証画面へ移動し、あなたの Drive に作成したあとサービスアカウントへ編集権限を付与します。
+        新規作成では Google 認証画面へ移動し、あなたの Drive に source / history / 発行者 シートを作成したあとサービスアカウントへ編集権限を付与します。
       </div>
-
-      {/* <div style={{ display: 'grid', gap: 12, marginTop: 16, marginBottom: 18 }}>
-        <button
-          className={`button-link ${hasSourceSpreadsheet && !message ? 'primary' : 'secondary'}`}
-          type="button"
-          onClick={() => void importFromGoogleSheet()}
-          disabled={sheetPending || !setting}
-          style={{ width: '100%' }}
-        >
-          {sheetPending ? 'スプレッドシート取込中...' : 'スプレッドシートから取り込む'}
-        </button>
-      </div> */}
+      {setting ? (
+        <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
+          <div className="source-meta">
+            現在のスプレッドシート:
+            {' '}
+            <strong style={{ color: 'var(--accent-strong)' }}>{initialSpreadsheetTitle || '名称未取得'}</strong>
+          </div>
+          <div className="source-meta">
+            参照しているシート:
+            {' '}
+            <strong style={{ color: 'var(--accent-strong)' }}>{setting.sheetName}</strong>
+          </div>
+          <div className="source-meta">
+            スプレッドシート ID:
+            {' '}
+            <code>{setting.spreadsheetId}</code>
+          </div>
+        </div>
+      ) : (
+        <div className="source-meta" style={{ marginTop: 12 }}>
+          取込元の source スプレッドシートは未設定です。先に連携するスプレッドシートを選んでください。
+        </div>
+      )}
+      {hasIssuerValues(issuerValues) ? (
+        <div className="source-meta" style={{ marginTop: 8 }}>
+          `konoyubi` から受け取った発行者データは、新規作成を選んだときに発行者シートへ反映されます。
+        </div>
+      ) : null}
 
       {message ? <div className="note">{message}</div> : null}
       {error ? (
@@ -321,4 +349,41 @@ export function ImportPanel({
       ) : null}
     </article>
   );
+}
+
+function appendIssuerValues(params: URLSearchParams, issuerValues?: KonoyubiIssuerSeed | null) {
+  if (!issuerValues) {
+    return;
+  }
+
+  const entries: Array<[string, string | undefined]> = [
+    ['issuerName', issuerValues.issuerName],
+    ['issuerPostalCode', issuerValues.issuerPostalCode],
+    ['issuerAddress', issuerValues.issuerAddress],
+    ['issuerContact', issuerValues.issuerContact],
+    ['issuerEmail', issuerValues.issuerEmail],
+    ['issuerInvoiceNumber', issuerValues.issuerInvoiceNumber],
+    ['issuerRepresentativeName', issuerValues.issuerRepresentativeName],
+    ['issuerRepresentativeTitle', issuerValues.issuerRepresentativeTitle],
+    ['issuerStampUrl', issuerValues.issuerStampUrl],
+    ['bankNote', issuerValues.bankNote],
+    ['bankName', issuerValues.bankName],
+    ['bankNumber', issuerValues.bankNumber]
+  ];
+
+  for (const [key, value] of entries) {
+    const normalized = String(value || '').trim();
+    if (!normalized) {
+      continue;
+    }
+    params.set(key, normalized);
+  }
+}
+
+function hasIssuerValues(issuerValues?: KonoyubiIssuerSeed | null): boolean {
+  if (!issuerValues) {
+    return false;
+  }
+
+  return Object.values(issuerValues).some((value) => String(value || '').trim().length > 0);
 }

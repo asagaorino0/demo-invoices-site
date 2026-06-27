@@ -1,0 +1,68 @@
+import { importInvoiceCsvRows, parseInvoiceCsvText } from './csv/import';
+import { getGoogleSheetsErrorStatus, readGoogleSheetCsvText } from './google-sheets';
+import { normalizeCompanyName } from './project-fields';
+import { getGoogleSheetSetting } from './store/google-sheet-settings';
+import { persistImportedBundle } from './store/projects';
+import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../types';
+
+export interface SyncSourceSheetResult {
+  importId: string;
+  projectCount: number;
+  lineCount: number;
+  selectionCount: number;
+  warnings: Array<{ code: string; message: string; rowNumber?: number }>;
+  sheetName: string;
+  spreadsheetId: string;
+}
+
+export async function syncProjectsFromSourceSheet(): Promise<SyncSourceSheetResult> {
+  const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
+  const setting = await getGoogleSheetSetting(settingKey);
+  if (!setting) {
+    throw new Error('source スプレッドシート設定が未登録です。先にスプレッドシート設定を保存してください。');
+  }
+
+  const sheetResult = await readGoogleSheetCsvText({
+    spreadsheetId: setting.spreadsheetId,
+    sheetName: setting.sheetName,
+    historySheetName: setting.historySheetName
+  });
+  const rows = parseInvoiceCsvText(sheetResult.csvText);
+  const normalizedRows = rows.map((row) => ({
+    ...row,
+    companyName: normalizeCompanyName({
+      companyName: row.companyName,
+      invoiceRecipient: row.invoiceRecipient,
+      fallbackCompanyName: ''
+    })
+  }));
+  const bundle = importInvoiceCsvRows(normalizedRows);
+  const warnings = bundle.warnings;
+  const importId = crypto.randomUUID();
+  const replaceCompanyNames = Array.from(
+    new Set(rows.map((row) => String(row.companyName || '').trim()).filter(Boolean))
+  );
+
+  const persisted = await persistImportedBundle({
+    importId,
+    replaceCompanyNames,
+    sourceName: `google-sheet:${sheetResult.spreadsheetId}:${sheetResult.sheetName}`,
+    sourceType: 'csv',
+    rowCount: normalizedRows.length,
+    warnings,
+    projects: bundle.projects,
+    serviceLines: bundle.serviceLines,
+    invoiceSelections: bundle.invoiceSelections
+  });
+
+  return {
+    ...persisted,
+    warnings,
+    sheetName: sheetResult.sheetName,
+    spreadsheetId: sheetResult.spreadsheetId
+  };
+}
+
+export function getSourceSheetSyncErrorStatus(error: unknown): number {
+  return getGoogleSheetsErrorStatus(error) || 500;
+}

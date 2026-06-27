@@ -8,6 +8,23 @@ export const dynamic = 'force-dynamic';
 const OAUTH_STATE_COOKIE = 'google_oauth_source_sheet_state';
 const OAUTH_PAYLOAD_COOKIE = 'google_oauth_source_sheet_payload';
 
+function parseIssuerValues(searchParams: URLSearchParams) {
+  return {
+    issuerName: String(searchParams.get('issuerName') || '').trim(),
+    issuerPostalCode: String(searchParams.get('issuerPostalCode') || '').trim(),
+    issuerAddress: String(searchParams.get('issuerAddress') || '').trim(),
+    issuerContact: String(searchParams.get('issuerContact') || '').trim(),
+    issuerEmail: String(searchParams.get('issuerEmail') || '').trim(),
+    issuerInvoiceNumber: String(searchParams.get('issuerInvoiceNumber') || '').trim(),
+    issuerRepresentativeName: String(searchParams.get('issuerRepresentativeName') || '').trim(),
+    issuerRepresentativeTitle: String(searchParams.get('issuerRepresentativeTitle') || '').trim(),
+    issuerStampUrl: String(searchParams.get('issuerStampUrl') || '').trim(),
+    bankNote: String(searchParams.get('bankNote') || '').trim(),
+    bankName: String(searchParams.get('bankName') || '').trim(),
+    bankNumber: String(searchParams.get('bankNumber') || '').trim()
+  };
+}
+
 function must(value: string | undefined, name: string): string {
   if (!value) {
     throw new Error(`ENV ${name} missing`);
@@ -16,10 +33,27 @@ function must(value: string | undefined, name: string): string {
 }
 
 function redirectToProjects(request: NextRequest, status: 'success' | 'error', message: string) {
-  const url = new URL('/projects', request.url);
+  return redirectToPath(request, '/projects', status, message);
+}
+
+function redirectToPath(
+  request: NextRequest,
+  returnPath: string,
+  status: 'success' | 'error',
+  message: string
+) {
+  const url = new URL(normalizeReturnPath(returnPath), request.url);
   url.searchParams.set('googleSheetStatus', status);
   url.searchParams.set('googleSheetMessage', message);
   return NextResponse.redirect(url);
+}
+
+function normalizeReturnPath(input: string): string {
+  const trimmed = String(input || '').trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
+    return '/projects';
+  }
+  return trimmed;
 }
 
 export async function GET(request: NextRequest) {
@@ -29,6 +63,8 @@ export async function GET(request: NextRequest) {
     const newFolderName = String(request.nextUrl.searchParams.get('newFolderName') || '').trim();
     const sheetName = String(request.nextUrl.searchParams.get('sheetName') || '').trim();
     const historySheetName = String(request.nextUrl.searchParams.get('historySheetName') || '').trim() || 'history';
+    const returnPath = normalizeReturnPath(String(request.nextUrl.searchParams.get('returnPath') || '').trim());
+    const issuerValues = parseIssuerValues(request.nextUrl.searchParams);
 
     if (!spreadsheetTitle) {
       return redirectToProjects(request, 'error', '新規作成するスプレッドシート名を入力してください。');
@@ -55,7 +91,9 @@ export async function GET(request: NextRequest) {
       destinationFolderUrlOrId,
       newFolderName,
       sheetName,
-      historySheetName
+      historySheetName,
+      returnPath,
+      issuerValues
     });
 
     cookieStore.set(OAUTH_STATE_COOKIE, state, {
@@ -67,7 +105,15 @@ export async function GET(request: NextRequest) {
     });
     cookieStore.set(
       OAUTH_PAYLOAD_COOKIE,
-      JSON.stringify({ spreadsheetTitle, destinationFolderUrlOrId, newFolderName, sheetName, historySheetName }),
+      JSON.stringify({
+        spreadsheetTitle,
+        destinationFolderUrlOrId,
+        newFolderName,
+        sheetName,
+        historySheetName,
+        returnPath,
+        issuerValues
+      }),
       {
         httpOnly: true,
         sameSite: 'lax',

@@ -5,9 +5,12 @@ import { ProjectEditor } from './[projectId]/project-editor';
 import { loadSiteConfig } from '../../lib/site-config';
 import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 import { SourceSheetDialog } from './source-sheet-dialog';
+import { SourceSheetLiveRefresh } from './source-sheet-live-refresh';
 import { NewUserDialog } from './new-user-dialog';
 import { UserInfoDialogTrigger } from './user-info-dialog-trigger';
 import { WorkbenchLayoutShell } from './workbench-layout-shell';
+import { getGoogleSpreadsheetTitle } from '../../lib/google-sheets';
+import { readSourceSheetViewData } from '../../lib/source-sheet-view';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +21,20 @@ export default async function ProjectsPage({
 }) {
   let projects: ProjectSummary[] = [];
   let loadError = '';
+  let sourceDetailsByProjectId = new Map<
+    string,
+    Awaited<ReturnType<typeof getProjectDetail>>
+  >();
+  const selectedGoogleSheetSetting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
 
   try {
-    projects = await listProjectSummaries();
+    if (selectedGoogleSheetSetting) {
+      const sourceView = await readSourceSheetViewData();
+      projects = sourceView.summaries;
+      sourceDetailsByProjectId = sourceView.detailsByProjectId;
+    } else {
+      projects = await listProjectSummaries();
+    }
   } catch (error) {
     loadError = error instanceof Error ? error.message : 'Unknown error';
   }
@@ -38,11 +52,15 @@ export default async function ProjectsPage({
       invoiceSelections: []
     }))
     : null;
-  const selectedGoogleSheetSetting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
+  const selectedGoogleSpreadsheetTitle = selectedGoogleSheetSetting
+    ? await getGoogleSpreadsheetTitle({
+      spreadsheetId: selectedGoogleSheetSetting.spreadsheetId,
+      sheetName: selectedGoogleSheetSetting.sheetName,
+      historySheetName: selectedGoogleSheetSetting.historySheetName
+    }).catch(() => '')
+    : '';
   const hasSourceSpreadsheetSetting = Boolean(selectedGoogleSheetSetting);
-  const visibleProjects = hasSourceSpreadsheetSetting
-    ? filterProjectsBySelectedSheet(projects, selectedGoogleSheetSetting?.updatedAt || '')
-    : [];
+  const visibleProjects = hasSourceSpreadsheetSetting ? projects : [];
   const customerGroups = buildCustomerGroups(visibleProjects);
   const requestedProjectId = resolvedSearchParams?.projectId || '';
   const visibleProjectIds = new Set(customerGroups.map((group) => group.project.id));
@@ -61,11 +79,11 @@ export default async function ProjectsPage({
   const config = activeProjectId ? await loadSiteConfig() : null;
   const selectedBundle = hasSourceSpreadsheetSetting
     ? activeProjectId
-      ? await getProjectDetail(activeProjectId).catch(() => ({
+      ? sourceDetailsByProjectId.get(activeProjectId) || {
         project: null,
         serviceLines: [],
         invoiceSelections: []
-      }))
+      }
       : null
     : manualProjectCanOpen
       ? selectedContextBundle
@@ -82,6 +100,7 @@ export default async function ProjectsPage({
 
   return (
     <main className="page-shell">
+      <SourceSheetLiveRefresh enabled={Boolean(selectedGoogleSheetSetting)} />
       <section
         // className="hero"
         style={{
@@ -89,7 +108,10 @@ export default async function ProjectsPage({
           padding: "0px 24px"
         }}
       >
-        <SourceSheetDialog initialSetting={selectedGoogleSheetSetting} />
+        <SourceSheetDialog
+          initialSetting={selectedGoogleSheetSetting}
+          initialSpreadsheetTitle={selectedGoogleSpreadsheetTitle}
+        />
         {/* <p className="eyebrow">INVOICE WORKBENCH</p> */}
         <h1 className="page-title-static">スプシで請求書</h1>
         {/* <p>
@@ -297,14 +319,6 @@ function buildCustomerGroups(projects: ProjectSummary[]) {
   }
 
   return Array.from(groups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName, 'ja'));
-}
-
-function filterProjectsBySelectedSheet(projects: ProjectSummary[], settingUpdatedAt: string) {
-  if (!settingUpdatedAt) {
-    return [];
-  }
-
-  return projects.filter((project) => (project.lastImportedAt || '') >= settingUpdatedAt);
 }
 
 // function StatCard({ label, value }: { label: string; value: string }) {

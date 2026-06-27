@@ -29,6 +29,7 @@ interface ProjectEditorProps {
 
 type ReorderTab = 'uncollected' | 'collected';
 type InvoiceRecipientMode = 'customer' | 'company' | 'facility' | 'custom';
+const DRAFT_LINE_ID_PREFIX = '__draft_line__';
 
 const invoiceDateModeOptions: Array<{
   value: Project['defaultInvoiceDateMode'];
@@ -181,6 +182,10 @@ function buildInvoiceRecipientOptions(form: {
   options.push({ value: 'custom', label: 'その他' });
 
   return options;
+}
+
+function isDraftLineId(lineId: string): boolean {
+  return lineId.startsWith(DRAFT_LINE_ID_PREFIX);
 }
 
 function inferInvoiceRecipientMode(form: {
@@ -673,6 +678,10 @@ export function ProjectEditor({
       return [];
     });
 
+    if (lineEditorDialogOpen && lineForm) {
+      return;
+    }
+
     const nextEditingLineId =
       editingLineId && serviceLineIds.has(editingLineId)
         ? editingLineId
@@ -703,7 +712,7 @@ export function ProjectEditor({
         }
         : null
     );
-  }, [invoiceSelections, serviceLines]);
+  }, [editingLineId, invoiceSelections, lineEditorDialogOpen, serviceLines]);
 
   function syncLineForm(lineId: string) {
     const line = serviceLines.find((item) => item.id === lineId);
@@ -998,31 +1007,57 @@ export function ProjectEditor({
       return false;
     }
 
-    const response = await fetch(`/api/projects/${project.id}/lines/${editingLine.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        serviceDate: lineForm.serviceDate || null,
-        serviceName: lineForm.serviceName,
-        staffName: lineForm.staffName,
-        price: Number(lineForm.price || 0),
-        quantity: Number(lineForm.quantity || 1),
-        unit: lineForm.unit,
-        taxIncluded: lineForm.taxIncluded,
-        remarks: lineForm.remarks,
-        memo: lineForm.memo,
-        visible: lineForm.visible,
-        collectionStatus: lineForm.collectionStatus,
-        collectedAt: lineForm.collectionStatus === 'collected' ? lineForm.collectedAt || null : null,
-        receiptIssuedAt:
-          lineForm.collectionStatus === 'collected' ? lineForm.receiptIssuedAt || null : null
-      })
-    });
+    const payload = {
+      serviceDate: lineForm.serviceDate || null,
+      serviceName: lineForm.serviceName,
+      staffName: lineForm.staffName,
+      price: Number(lineForm.price || 0),
+      quantity: Number(lineForm.quantity || 1),
+      unit: lineForm.unit,
+      taxIncluded: lineForm.taxIncluded,
+      remarks: lineForm.remarks,
+      memo: lineForm.memo,
+      visible: lineForm.visible,
+      collectionStatus: lineForm.collectionStatus,
+      collectedAt: lineForm.collectionStatus === 'collected' ? lineForm.collectedAt || null : null,
+      receiptIssuedAt:
+        lineForm.collectionStatus === 'collected' ? lineForm.receiptIssuedAt || null : null
+    };
 
-    const data = (await response.json()) as { message?: string };
+    const isDraftLine = isDraftLineId(editingLine.id);
+    const response = await fetch(
+      isDraftLine ? `/api/projects/${project.id}/lines` : `/api/projects/${project.id}/lines/${editingLine.id}`,
+      {
+        method: isDraftLine ? 'POST' : 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = (await response.json()) as { message?: string; line?: ServiceLine };
     if (!response.ok) {
       setError(data.message || '明細を保存できませんでした。');
       return false;
+    }
+
+    if (data.line?.id) {
+      setEditingLineOverride(data.line);
+      setEditingLineId(data.line.id);
+      setLineForm({
+        serviceDate: data.line.serviceDate || '',
+        serviceName: data.line.serviceName,
+        staffName: data.line.staffName,
+        price: String(data.line.price),
+        quantity: String(data.line.quantity),
+        unit: data.line.unit,
+        taxIncluded: data.line.taxIncluded,
+        remarks: data.line.remarks,
+        memo: data.line.memo,
+        visible: data.line.visible,
+        collectionStatus: data.line.collectionStatus,
+        collectedAt: data.line.collectedAt || '',
+        receiptIssuedAt: data.line.receiptIssuedAt || ''
+      });
     }
     const synced = await syncProjectToSheet({
       successMessage: 'プレビューに反映し、Google Sheets に保存しました。',
@@ -1040,6 +1075,11 @@ export function ProjectEditor({
     if (!editingLine) return false;
     setMessage('');
     setError('');
+
+    if (isDraftLineId(editingLine.id)) {
+      setError('新規明細は保存してから複製してください。');
+      return false;
+    }
 
     const response = await fetch(`/api/projects/${project.id}/lines/${editingLine.id}`, {
       method: 'POST'
@@ -1068,6 +1108,15 @@ export function ProjectEditor({
 
     const ok = window.confirm('この明細を削除しますか？');
     if (!ok) return;
+
+    if (isDraftLineId(editingLine.id)) {
+      setEditingLineOverride(null);
+      setEditingLineId('');
+      setLineForm(null);
+      setLineEditorDialogOpen(false);
+      setMessage('新規明細の入力を取り消しました。');
+      return;
+    }
 
     const response = await fetch(`/api/projects/${project.id}/lines/${editingLine.id}`, {
       method: 'DELETE'
@@ -1378,29 +1427,30 @@ export function ProjectEditor({
     setMessage('');
     setError('');
     const today = new Date().toISOString().slice(0, 10);
-    const response = await fetch(`/api/projects/${project.id}/lines`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        serviceDate: today,
-        serviceName: '新規サービス',
-        staffName: '',
-        price: 0,
-        quantity: 1,
-        unit: '回',
-        taxIncluded: true,
-        remarks: '',
-        memo: '',
-        visible: true,
-        collectionStatus: 'uncollected'
-      })
-    });
-    const data = (await response.json()) as { message?: string; line?: ServiceLine };
-    if (!response.ok || !data.line?.id) {
-      setError(data.message || '明細を追加できませんでした。');
-      return false;
-    }
-    const nextLine = data.line;
+    const now = new Date().toISOString();
+    const nextLine: ServiceLine = {
+      id: `${DRAFT_LINE_ID_PREFIX}${now}`,
+      projectId: project.id,
+      reservationId: '',
+      serviceDate: today,
+      serviceName: '新規サービス',
+      staffName: '',
+      price: 0,
+      quantity: 1,
+      unit: '回',
+      taxIncluded: true,
+      extraCharges: [],
+      remarks: '',
+      memo: '',
+      visible: true,
+      collectionStatus: 'uncollected',
+      collectedAt: null,
+      receiptIssuedAt: null,
+      invoiceCode: '',
+      sortKey: Number(today.replace(/-/g, '')),
+      createdAt: now,
+      updatedAt: now
+    };
     const nextLineId = nextLine.id;
     setEditingLineOverride(nextLine);
     setEditingLineId(nextLineId);
@@ -1422,15 +1472,7 @@ export function ProjectEditor({
     if (options?.openEditor) {
       setLineEditorDialogOpen(true);
     }
-    const synced = await syncProjectToSheet({
-      successMessage: '明細を追加し、Google Sheets に保存しました。',
-      failureMessage: '明細は追加しましたが、Google Sheets への保存に失敗しました。'
-    });
-    if (!synced) {
-      setShowSheetSyncReminder(true);
-      startTransition(() => router.refresh());
-      return false;
-    }
+    setMessage('新規明細を入力中です。保存すると source スプレッドシートへ反映されます。');
     return true;
   }
 

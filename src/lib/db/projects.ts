@@ -7,6 +7,7 @@ import {
   upsertSelection,
   writeLocalStore
 } from '../local-store';
+import { stableId } from '../csv/shared';
 import { getDb, withTransaction } from './client';
 import {
   deleteServiceLineSql,
@@ -858,8 +859,10 @@ function padCode(value: number, length: number): string {
 
 export async function createServiceLine(input: CreateServiceLineInput): Promise<ServiceLine> {
   const now = new Date().toISOString();
-  const id = crypto.randomUUID();
   const reservationId = input.reservationId || `manual-${now.replace(/\D/g, '').slice(0, 14)}`;
+  const project = await getProjectDetail(input.projectId);
+  const customerId = project.project?.customerId || input.projectId;
+  const id = stableId('line', customerId, reservationId);
   const sortKey = input.serviceDate ? Number(input.serviceDate.replace(/-/g, '')) : 0;
   const collectedAt =
     input.collectionStatus === 'collected' ? new Date().toISOString().slice(0, 10) : '';
@@ -937,6 +940,46 @@ export async function createServiceLine(input: CreateServiceLineInput): Promise<
   }
 }
 
+export async function loadServiceLineIdentitiesForCustomers(
+  customerIds: string[]
+): Promise<Array<{ customerId: string; lineId: string; reservationId: string }>> {
+  if (customerIds.length === 0) return [];
+
+  try {
+    const db = await getDb();
+    const result = await db.query<{ customerId: string; lineId: string; reservationId: string }>(
+      `
+        select
+          p.customer_id as "customerId",
+          sl.id as "lineId",
+          sl.reservation_id as "reservationId"
+        from service_lines sl
+        inner join projects p on p.id = sl.project_id
+        where p.customer_id = any($1::text[])
+      `,
+      [customerIds]
+    );
+    return result.rows;
+  } catch (error) {
+    if (!shouldUseLocalStore(error)) throw error;
+    const store = await readLocalStore();
+    const projectById = new Map(store.projects.map((project) => [project.id, project]));
+    return store.serviceLines
+      .map((line) => {
+        const project = projectById.get(line.projectId);
+        if (!project || !customerIds.includes(project.customerId)) {
+          return null;
+        }
+        return {
+          customerId: project.customerId,
+          lineId: line.id,
+          reservationId: line.reservationId
+        };
+      })
+      .filter((row): row is { customerId: string; lineId: string; reservationId: string } => Boolean(row));
+  }
+}
+
 export async function duplicateServiceLine(input: DuplicateServiceLineInput): Promise<ServiceLine | null> {
   const detail = await getProjectDetail(input.projectId);
   const source = detail.serviceLines.find((line) => line.id === input.lineId);
@@ -995,7 +1038,7 @@ function shouldUseLocalStore(error: unknown): boolean {
   );
 }
 
-async function loadSelectionsForCustomers(customerIds: string[]): Promise<InvoiceSelection[]> {
+export async function loadSelectionsForCustomers(customerIds: string[]): Promise<InvoiceSelection[]> {
   if (customerIds.length === 0) return [];
 
   try {

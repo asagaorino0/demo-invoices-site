@@ -58,6 +58,8 @@ export interface CreateGoogleSheetTargetInput {
   title: string;
   sheetName: string;
   historySheetName?: string | null;
+  issuerSheetName?: string | null;
+  issuerValues?: IssuerSheetSeed | null;
 }
 
 export interface CreateGoogleSheetTargetResult {
@@ -65,6 +67,22 @@ export interface CreateGoogleSheetTargetResult {
   spreadsheetUrl: string;
   sheetName: string;
   historySheetName: string;
+  issuerSheetName: string;
+}
+
+export interface IssuerSheetSeed {
+  issuerName?: string | null;
+  issuerPostalCode?: string | null;
+  issuerAddress?: string | null;
+  issuerContact?: string | null;
+  issuerEmail?: string | null;
+  issuerInvoiceNumber?: string | null;
+  issuerRepresentativeName?: string | null;
+  issuerRepresentativeTitle?: string | null;
+  issuerStampUrl?: string | null;
+  bankNote?: string | null;
+  bankName?: string | null;
+  bankNumber?: string | null;
 }
 
 export interface GoogleUserOAuthTokens {
@@ -97,6 +115,19 @@ const HISTORY_HEADERS = [
   'changedFields',
   'changeSummary',
   'rowCount'
+] as const;
+
+const ISSUER_HEADERS = [
+  'issuerName',
+  'issuerPostalCode',
+  'issuerAddress',
+  'issuerContact',
+  'issuerEmail',
+  'issuerInvoiceNumber',
+  'issuerRepresentativeName',
+  'issuerRepresentativeTitle',
+  'issuerStampUrl',
+  'bankNote'
 ] as const;
 
 const HISTORY_FIELD_LABELS: Partial<Record<keyof InvoiceCsvRow | 'reservationId', string>> = {
@@ -277,11 +308,25 @@ export async function verifyGoogleSheetTarget(target: GoogleSheetTarget): Promis
   };
 }
 
+export async function getGoogleSpreadsheetTitle(target: GoogleSheetTarget): Promise<string> {
+  const config = getGoogleSheetsConfig(target);
+  const accessToken = await fetchGoogleAccessToken(config);
+  const metadata = await fetchSpreadsheetMetadata({
+    accessToken,
+    spreadsheetId: config.spreadsheetId,
+    clientEmail: config.clientEmail
+  });
+
+  return String(metadata.properties?.title || '').trim();
+}
+
 export async function createGoogleSheetTarget(
   input: CreateGoogleSheetTargetInput
 ): Promise<CreateGoogleSheetTargetResult> {
   const sheetName = String(input.sheetName || '').trim();
   const historySheetName = String(input.historySheetName || '').trim() || 'history';
+  const issuerSheetName = String(input.issuerSheetName || '').trim() || '発行者';
+  const issuerValues = normalizeIssuerSheetSeed(input.issuerValues);
   const title = String(input.title || '').trim();
 
   if (!title) {
@@ -302,6 +347,7 @@ export async function createGoogleSheetTarget(
     title,
     sheetName,
     historySheetName,
+    issuerSheetName,
     clientEmail: config.clientEmail
   });
 
@@ -321,11 +367,20 @@ export async function createGoogleSheetTarget(
     clientEmail: config.clientEmail
   });
 
+  await updateSheetValues({
+    accessToken,
+    spreadsheetId: created.spreadsheetId,
+    range: `${toSheetRangePrefix(issuerSheetName)}!A1`,
+    values: [Array.from(ISSUER_HEADERS), buildIssuerSheetRow(issuerValues)],
+    clientEmail: config.clientEmail
+  });
+
   return {
     spreadsheetId: created.spreadsheetId,
     spreadsheetUrl: created.spreadsheetUrl,
     sheetName,
-    historySheetName
+    historySheetName,
+    issuerSheetName
   };
 }
 
@@ -384,9 +439,14 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
   newFolderName?: string | null;
   sheetName: string;
   historySheetName?: string | null;
+  issuerSheetName?: string | null;
+  issuerValues?: IssuerSheetSeed | null;
 }): Promise<CreateGoogleSheetTargetResult> {
   const sheetName = String(input.sheetName || '').trim();
   const historySheetName = String(input.historySheetName || '').trim() || 'history';
+  const issuerSheetName = String(input.issuerSheetName || '').trim() || '発行者';
+  const issuerValues = normalizeIssuerSheetSeed(input.issuerValues);
+  const issuerRow = buildIssuerSheetRow(issuerValues);
   const title = String(input.title || '').trim();
   const destinationFolderId = String(input.destinationFolderId || '').trim();
   const newFolderName = String(input.newFolderName || '').trim();
@@ -400,6 +460,15 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
   if (destinationFolderId && newFolderName) {
     throw new Error('保存先フォルダは既存フォルダか新規フォルダのどちらか一方だけ指定してください。');
   }
+
+  console.log('[google-sheets] createGoogleSheetTargetWithUserAccessToken', {
+    title,
+    sheetName,
+    historySheetName,
+    issuerSheetName,
+    issuerValues,
+    issuerRow
+  });
 
   const parentFolderId = destinationFolderId
     ? await ensureDriveFolderAccessible({
@@ -417,7 +486,8 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
     accessToken: input.accessToken,
     title,
     sheetName,
-    historySheetName
+    historySheetName,
+    issuerSheetName
   });
 
   if (parentFolderId) {
@@ -442,12 +512,58 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
     values: [Array.from(HISTORY_HEADERS)]
   });
 
+  await updateSheetValues({
+    accessToken: input.accessToken,
+    spreadsheetId: created.spreadsheetId,
+    range: `${toSheetRangePrefix(issuerSheetName)}!A1`,
+    values: [Array.from(ISSUER_HEADERS), issuerRow]
+  });
+
   return {
     spreadsheetId: created.spreadsheetId,
     spreadsheetUrl: created.spreadsheetUrl,
     sheetName,
-    historySheetName
+    historySheetName,
+    issuerSheetName
   };
+}
+
+function normalizeIssuerSheetSeed(input?: IssuerSheetSeed | null): IssuerSheetSeed {
+  return {
+    issuerName: String(input?.issuerName || '').trim(),
+    issuerPostalCode: String(input?.issuerPostalCode || '').trim(),
+    issuerAddress: String(input?.issuerAddress || '').trim(),
+    issuerContact: String(input?.issuerContact || '').trim(),
+    issuerEmail: String(input?.issuerEmail || '').trim(),
+    issuerInvoiceNumber: String(input?.issuerInvoiceNumber || '').trim(),
+    issuerRepresentativeName: String(input?.issuerRepresentativeName || '').trim(),
+    issuerRepresentativeTitle: String(input?.issuerRepresentativeTitle || '').trim(),
+    issuerStampUrl: String(input?.issuerStampUrl || '').trim(),
+    bankNote: String(input?.bankNote || '').trim(),
+    bankName: String(input?.bankName || '').trim(),
+    bankNumber: String(input?.bankNumber || '').trim()
+  };
+}
+
+function buildIssuerSheetRow(values: IssuerSheetSeed): string[] {
+  const bankNote = values.bankNote || buildIssuerBankNote(values.bankName, values.bankNumber);
+  return [
+    values.issuerName || '',
+    values.issuerPostalCode || '',
+    values.issuerAddress || '',
+    values.issuerContact || '',
+    values.issuerEmail || '',
+    values.issuerInvoiceNumber || '',
+    values.issuerRepresentativeName || '',
+    values.issuerRepresentativeTitle || '',
+    values.issuerStampUrl || '',
+    bankNote
+  ];
+}
+
+function buildIssuerBankNote(bankName?: string | null, bankNumber?: string | null): string {
+  const parts = [String(bankName || '').trim(), String(bankNumber || '').trim()].filter(Boolean);
+  return parts.length > 0 ? `振込先：${parts.join(' ')}` : '';
 }
 
 async function ensureDriveFolderAccessible(input: {
@@ -693,9 +809,9 @@ async function fetchSpreadsheetMetadata(input: {
   accessToken: string;
   spreadsheetId: string;
   clientEmail?: string;
-}): Promise<{ sheets: Array<{ properties?: { title?: string } }> }> {
+}): Promise<{ properties?: { title?: string }; sheets: Array<{ properties?: { title?: string } }> }> {
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}?fields=sheets.properties.title`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}?fields=properties.title,sheets.properties.title`,
     {
       headers: {
         authorization: `Bearer ${input.accessToken}`
@@ -714,7 +830,7 @@ async function fetchSpreadsheetMetadata(input: {
     );
   }
 
-  return (await response.json()) as { sheets: Array<{ properties?: { title?: string } }> };
+  return (await response.json()) as { properties?: { title?: string }; sheets: Array<{ properties?: { title?: string } }> };
 }
 
 async function createSpreadsheet(input: {
@@ -722,8 +838,13 @@ async function createSpreadsheet(input: {
   title: string;
   sheetName: string;
   historySheetName: string;
+  issuerSheetName?: string;
   clientEmail?: string;
 }): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+  const sheetTitles = [input.sheetName, input.historySheetName, input.issuerSheetName || '']
+    .map((title) => String(title || '').trim())
+    .filter(Boolean)
+    .filter((title, index, values) => values.indexOf(title) === index);
   const response = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
     method: 'POST',
     headers: {
@@ -734,18 +855,11 @@ async function createSpreadsheet(input: {
       properties: {
         title: input.title
       },
-      sheets: [
-        {
-          properties: {
-            title: input.sheetName
-          }
-        },
-        {
-          properties: {
-            title: input.historySheetName
-          }
+      sheets: sheetTitles.map((title) => ({
+        properties: {
+          title
         }
-      ]
+      }))
     })
   });
 

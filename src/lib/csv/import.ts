@@ -72,10 +72,91 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
   const warnings: InvoiceImportWarning[] = [];
   const normalizedRows: NormalizedRow[] = [];
   const now = isoNow();
+  const projectMap = new Map<string, Project>();
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2;
     if (isProjectPlaceholderRow(row)) {
+      const customerId = readString(row.userId);
+      if (!customerId) {
+        warnings.push({
+          code: 'row_skipped_missing_key',
+          message: 'userId が空のため案件プレースホルダー行をスキップしました。',
+          rowNumber
+        });
+        return;
+      }
+
+      const placeholderRow = {
+        customerId,
+        customerName: readString(row.userName),
+        subject: readString(row.subject),
+        defaultInvoiceDateMode: readInvoiceDateMode(row.defaultInvoiceDateMode),
+        invoiceRecipient: readString(row.invoiceRecipient),
+        facilityName: readString(row.facilityName),
+        companyName: normalizeCompanyName({
+          companyName: readString(row.companyName),
+          invoiceRecipient: readString(row.invoiceRecipient)
+        }),
+        issueDate: readDate(row.invoiceDate),
+        remarks: readString(row.remarks),
+        issuerBoxOffsetX: parseNumber(row.issuerBoxOffsetX, 0),
+        issuerBoxOffsetY: parseNumber(row.issuerBoxOffsetY, 0),
+        issuerBoxWidth: parseNumber(row.issuerBoxWidth, 0),
+        stampOffsetX: parseNumber(row.stampOffsetX, 0),
+        stampOffsetY: parseNumber(row.stampOffsetY, 0)
+      };
+      const projectId = stableId('project', placeholderRow.customerId);
+      const existing = projectMap.get(projectId);
+
+      if (!existing) {
+        projectMap.set(projectId, {
+          id: projectId,
+          importId: null,
+          customerId: placeholderRow.customerId,
+          customerName:
+            placeholderRow.customerName || placeholderRow.invoiceRecipient || placeholderRow.customerId,
+          subject: placeholderRow.subject,
+          defaultInvoiceDateMode: placeholderRow.defaultInvoiceDateMode,
+          invoiceRecipient:
+            placeholderRow.invoiceRecipient || placeholderRow.customerName || placeholderRow.customerId,
+          facilityName: placeholderRow.facilityName,
+          companyName: placeholderRow.companyName,
+          issueDate: placeholderRow.issueDate,
+          defaultRemarks: placeholderRow.remarks,
+          issuerBoxOffsetX: placeholderRow.issuerBoxOffsetX,
+          issuerBoxOffsetY: placeholderRow.issuerBoxOffsetY,
+          issuerBoxWidth: placeholderRow.issuerBoxWidth,
+          stampOffsetX: placeholderRow.stampOffsetX,
+          stampOffsetY: placeholderRow.stampOffsetY,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now
+        });
+      } else {
+        if (!existing.customerName && placeholderRow.customerName) {
+          existing.customerName = placeholderRow.customerName;
+        }
+        if (!existing.invoiceRecipient && placeholderRow.invoiceRecipient) {
+          existing.invoiceRecipient = placeholderRow.invoiceRecipient;
+        }
+        if (!existing.facilityName && placeholderRow.facilityName) {
+          existing.facilityName = placeholderRow.facilityName;
+        }
+        if (!existing.companyName && placeholderRow.companyName) {
+          existing.companyName = placeholderRow.companyName;
+        }
+        if (!existing.subject && placeholderRow.subject) {
+          existing.subject = placeholderRow.subject;
+        }
+        if (!existing.defaultRemarks && placeholderRow.remarks) {
+          existing.defaultRemarks = placeholderRow.remarks;
+        }
+        if (!existing.issueDate && placeholderRow.issueDate) {
+          existing.issueDate = placeholderRow.issueDate;
+        }
+        existing.updatedAt = now;
+      }
       return;
     }
     const customerId = readString(row.userId);
@@ -136,7 +217,6 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
     });
   });
 
-  const projectMap = new Map<string, Project>();
   const serviceLines: ServiceLine[] = [];
 
   normalizedRows.forEach((row) => {

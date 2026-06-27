@@ -53,6 +53,65 @@ export default function GuidePage() {
             側、見本や軽量配布は static 側という役割分担です。
           </p>
         </article>
+
+        <article className="card">
+          <h2>konoyubi 連携</h2>
+          <p>
+            <code>konoyubi</code> から新規スプレッドシート作成へ直行させる場合は、
+            <code>/api/google/auth</code> に発行者情報を付けて開きます。
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            実装のひな形:
+            {' '}
+            <code>src/lib/konoyubi/build-source-sheet-auth-url.ts</code>
+          </p>
+        </article>
+      </section>
+
+      <section className="card" style={{ marginTop: 24 }}>
+        <p className="eyebrow" id="issuer-sheet-spec">
+          KONOYUBI EXAMPLE
+        </p>
+        <h2>ボタン実装例</h2>
+        <p>
+          `konoyubi` 側へ持っていく実装のまとまりは
+          {' '}
+          <code>docs/konoyubi-integration-example.md</code>
+          {' '}
+          に置いています。
+        </p>
+        <pre
+          style={{
+            margin: 0,
+            overflowX: 'auto',
+            padding: 16,
+            borderRadius: 18,
+            background: 'rgba(255,255,255,0.72)',
+            border: '1px solid var(--line)'
+          }}
+        >
+{`import { buildSourceSheetAuthUrl } from '@/lib/konoyubi/build-source-sheet-auth-url';
+
+const url = buildSourceSheetAuthUrl({
+  appOrigin: 'https://demo-invoices.example.com',
+  spreadsheetTitle: '2026年7月請求書',
+  issuer: {
+    issuerName: company.name,
+    issuerPostalCode: company.postalCode,
+    issuerAddress: company.address,
+    issuerContact: company.phone,
+    issuerEmail: company.email,
+    issuerInvoiceNumber: company.invoiceNumber,
+    issuerRepresentativeName: company.representativeName,
+    issuerRepresentativeTitle: company.representativeTitle,
+    issuerStampUrl: company.stampUrl,
+    bankName: company.bankName,
+    bankNumber: company.bankNumber
+  }
+});
+
+window.location.href = url;`}
+        </pre>
       </section>
     </main>
   );

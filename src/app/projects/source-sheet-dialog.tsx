@@ -25,9 +25,11 @@ function MenuIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 export function SourceSheetDialog({
-  initialSetting
+  initialSetting,
+  initialSpreadsheetTitle
 }: {
   initialSetting: GoogleSheetSetting | null;
+  initialSpreadsheetTitle?: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -85,7 +87,11 @@ export function SourceSheetDialog({
               </button>
             </div>
 
-            <ImportPanel initialSetting={initialSetting} withinDialog />
+            <ImportPanel
+              initialSetting={initialSetting}
+              initialSpreadsheetTitle={initialSpreadsheetTitle}
+              withinDialog
+            />
           </div>
         </div>
       ) : null}
