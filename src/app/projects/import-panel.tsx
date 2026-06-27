@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { CSSProperties, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type GoogleSheetSetting } from '../../types';
 import type { KonoyubiIssuerSeed } from '../../lib/konoyubi/build-source-sheet-auth-url';
@@ -65,6 +65,7 @@ export function ImportPanel({
     initialMode === undefined ? (withinDialog ? null : 'existing') : initialMode
   );
   const hasSourceSpreadsheet = Boolean(setting);
+  const hasSpreadsheetTitle = form.spreadsheetTitle.trim().length > 0;
   const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
 
   async function saveSetting() {
@@ -222,6 +223,7 @@ export function ImportPanel({
                   value={form.spreadsheetTitle}
                   onChange={(e) => setForm((current) => ({ ...current, spreadsheetTitle: e.target.value }))}
                   disabled={savePending}
+                  style={inputStyle}
                 />
                 <div style={{ display: 'grid', gap: 6 }}>
                   <label style={{ display: 'block', fontSize: 12, color: '#666' }}>保存先の既存フォルダ URL</label>
@@ -230,6 +232,7 @@ export function ImportPanel({
                     value={form.destinationFolderUrlOrId}
                     onChange={(e) => setForm((current) => ({ ...current, destinationFolderUrlOrId: e.target.value }))}
                     disabled={savePending}
+                    style={inputStyle}
                   />
                   <p className="source-meta" style={{ margin: 0 }}>
                     既存フォルダに入れたい場合は、そのフォルダの URL を貼り付けてください。
@@ -242,6 +245,7 @@ export function ImportPanel({
                     value={form.newFolderName}
                     onChange={(e) => setForm((current) => ({ ...current, newFolderName: e.target.value }))}
                     disabled={savePending}
+                    style={inputStyle}
                   />
                   <p className="source-meta" style={{ margin: 0 }}>
                     新しいフォルダを作って保存したいときだけ入力してください。両方入力した場合は使えません。
@@ -256,6 +260,7 @@ export function ImportPanel({
                   value={form.spreadsheetUrlOrId}
                   onChange={(e) => setForm((current) => ({ ...current, spreadsheetUrlOrId: e.target.value }))}
                   disabled={savePending}
+                  style={inputStyle}
                 />
                 <p className="source-meta" style={{ margin: 0 }}>
                   通常は URL をそのまま貼り付ければ大丈夫です。必要な場合だけ、URL の `/d/` と `/edit` の間にある文字列も使えます。
@@ -267,12 +272,14 @@ export function ImportPanel({
               value={form.sheetName}
               onChange={(e) => setForm((current) => ({ ...current, sheetName: e.target.value }))}
               disabled={savePending}
+              style={inputStyle}
             />
             <input
               placeholder="履歴シート名（任意）"
               value={form.historySheetName}
               onChange={(e) => setForm((current) => ({ ...current, historySheetName: e.target.value }))}
               disabled={savePending}
+              style={inputStyle}
             />
           </div>
 
@@ -289,7 +296,7 @@ export function ImportPanel({
               </button>
             ) : (
               <button
-                className="button-link secondary"
+                className={`button-link ${hasSpreadsheetTitle ? 'primary' : 'secondary'}`}
                 type="button"
                 onClick={startGoogleOauthCreate}
                 disabled={savePending}
@@ -319,16 +326,16 @@ export function ImportPanel({
             {' '}
             <strong style={{ color: 'var(--accent-strong)' }}>{initialSpreadsheetTitle || '名称未取得'}</strong>
           </div>
-          <div className="source-meta">
+          {/* <div className="source-meta">
             参照しているシート:
             {' '}
             <strong style={{ color: 'var(--accent-strong)' }}>{setting.sheetName}</strong>
-          </div>
-          <div className="source-meta">
+          </div> */}
+          {/* <div className="source-meta">
             スプレッドシート ID:
             {' '}
             <code>{setting.spreadsheetId}</code>
-          </div>
+          </div> */}
         </div>
       ) : (
         <div className="source-meta" style={{ marginTop: 12 }}>
@@ -387,3 +394,12 @@ function hasIssuerValues(issuerValues?: KonoyubiIssuerSeed | null): boolean {
 
   return Object.values(issuerValues).some((value) => String(value || '').trim().length > 0);
 }
+const inputStyle: CSSProperties = {
+  width: '100%',
+  marginBottom: 6,
+  padding: '6px 12px',
+  borderRadius: 12,
+  border: '1px solid var(--line)',
+  background: 'white',
+  font: 'inherit'
+};

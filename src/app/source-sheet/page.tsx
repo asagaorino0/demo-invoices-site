@@ -85,16 +85,18 @@ export default async function SourceSheetPage({
 
   return (
     <main className="page-shell">
-      <section className="card" style={{ marginBottom: 18 }}>
+      <section style={{ marginBottom: 18 }}>
         <p className="eyebrow" style={{ marginBottom: 8 }}>
           KONOYUBI CONNECT
         </p>
-        <h1 className="page-title-static" style={{ margin: 0 }}>
+        <h3 className="page-title-static" style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#5f143b" }}>
           Source スプレッドシート設定
-        </h1>
+        </h3>
         <p style={{ margin: '12px 0 0' }}>
-          `konoyubi` からこのページを開けば、共通の source スプレッドシート設定と新規作成をこのアプリ側へ引き継げます。
-          新規作成では `発行者` シートも一緒に作成されるため、発行者データの受け皿としてそのまま使えます。
+          `konoyubi` からこのページを開けば、source スプレッドシート新規作成をこのアプリで行えます。
+        </p>
+        <p style={{ margin: '6px 0 0' }}>
+          `konoyubi`のショップ情報も、スプレッドシートの `発行者` シートに作成します。
         </p>
       </section>
 
@@ -118,7 +120,8 @@ export default async function SourceSheetPage({
         />
       </section>
 
-      <section className="card" style={{ marginTop: 18 }}>
+      {/* <section style={{ marginTop: 18 }}> */}
+      <section className="grid">
         <div className="hero-actions" style={{ marginTop: 0 }}>
           <Link className="button-link primary" href="/projects">
             請求書画面を開く
@@ -131,7 +134,7 @@ export default async function SourceSheetPage({
         </div>
       </section>
 
-      <section className="card" style={{ marginTop: 18 }}>
+      {/* <section className="card" style={{ marginTop: 18 }}>
         <p className="eyebrow" style={{ marginBottom: 8 }}>
           ISSUER SHEET
         </p>
@@ -152,7 +155,7 @@ export default async function SourceSheetPage({
         <p className="source-meta" style={{ marginTop: 8 }}>
           詳細仕様は repo 内の `docs/issuer-sheet-spec.md` にまとめています。`konoyubi` 側の実装時はこの列名をそのまま使うのが安全です。
         </p>
-      </section>
+      </section> */}
     </main>
   );
 }
@@ -160,8 +163,8 @@ export default async function SourceSheetPage({
 function readIssuerValues(
   searchParams:
     | {
-        [key: string]: string | undefined;
-      }
+      [key: string]: string | undefined;
+    }
     | undefined
 ): KonoyubiIssuerSeed | null {
   const issuerValues = ISSUER_QUERY_KEYS.reduce<Record<string, string>>((accumulator, key) => {
