@@ -3,7 +3,7 @@ import { normalizeCompanyName } from '../../../lib/project-fields';
 import { validateProjectInput } from '../../../lib/validation';
 import { getGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
 import { getGoogleSheetsErrorStatus, readGoogleSheetValues, syncProjectToGoogleSheet } from '../../../lib/google-sheets';
-import { normalizeHeader } from '../../../lib/csv/shared';
+import { normalizeHeader, stableId } from '../../../lib/csv/shared';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type Project } from '../../../types';
 
 export async function GET(): Promise<Response> {
@@ -76,24 +76,15 @@ export async function POST(request: Request): Promise<Response> {
           sheetName: setting.sheetName,
           companyName: input.companyName,
           facilityName: input.facilityName
-        }).catch(() => null)
+        })
       : null;
-
-    const project = await createProject({
-      ...input,
-      customerId: sourceSheetCustomerId || undefined
-    });
-    let message = '新規利用者を登録しました。';
-    let sheetSync: {
-      ok: boolean;
-      spreadsheetId?: string;
-      sheetName?: string;
-      rowCount?: number;
-      message?: string;
-    } | null = null;
 
     if (setting) {
       try {
+        const project = buildSourceSheetProject({
+          ...input,
+          customerId: sourceSheetCustomerId || ''
+        });
         const result = await syncProjectToGoogleSheet({
           project,
           serviceLines: [],
@@ -104,28 +95,45 @@ export async function POST(request: Request): Promise<Response> {
             historySheetName: setting.historySheetName
           }
         });
-        await markProjectAsExported(project.id);
-        sheetSync = {
+        await markProjectAsExported(project.id).catch(() => undefined);
+        const sheetSync = {
           ok: true,
           spreadsheetId: result.spreadsheetId,
           sheetName: result.sheetName,
           rowCount: result.rowCount,
           message: `${result.rowCount} 行を Google Sheets に保存しました。`
         };
-        message = '新規利用者を登録し、Google Sheets に保存しました。';
+        return Response.json(
+          {
+            project,
+            message: '新規利用者を登録し、Google Sheets に保存しました。',
+            sheetSync
+          },
+          { status: 201 }
+        );
       } catch (error) {
         const status = getGoogleSheetsErrorStatus(error);
-        sheetSync = {
+        const sheetSync = {
           ok: false,
           message: error instanceof Error ? error.message : 'Google Sheets への保存に失敗しました。'
         };
-        if (status) {
-          message = '新規利用者は登録しましたが、Google Sheets への保存はできませんでした。';
-        }
+        return Response.json(
+          {
+            error: 'failed_to_create_project_in_google_sheet',
+            message: sheetSync.message || '新規利用者を Google Sheets に保存できませんでした。',
+            sheetSync
+          },
+          { status: status || 500 }
+        );
       }
     }
 
-    return Response.json({ project, message, sheetSync }, { status: 201 });
+    const project = await createProject({
+      ...input,
+      customerId: sourceSheetCustomerId || undefined
+    });
+
+    return Response.json({ project, message: '新規利用者を登録しました。', sheetSync: null }, { status: 201 });
   } catch (error) {
     return Response.json(
       {
@@ -135,6 +143,34 @@ export async function POST(request: Request): Promise<Response> {
       { status: 500 }
     );
   }
+}
+
+function buildSourceSheetProject(
+  input: Omit<Project, 'id' | 'importId' | 'status' | 'createdAt' | 'updatedAt'> & { customerId: string }
+): Project {
+  const now = new Date().toISOString();
+
+  return {
+    id: stableId('project', input.customerId),
+    importId: null,
+    customerId: input.customerId,
+    customerName: input.customerName,
+    subject: input.subject,
+    defaultInvoiceDateMode: input.defaultInvoiceDateMode,
+    invoiceRecipient: input.invoiceRecipient,
+    facilityName: input.facilityName,
+    companyName: input.companyName,
+    issueDate: input.issueDate,
+    defaultRemarks: input.defaultRemarks,
+    issuerBoxOffsetX: input.issuerBoxOffsetX,
+    issuerBoxOffsetY: input.issuerBoxOffsetY,
+    issuerBoxWidth: input.issuerBoxWidth,
+    stampOffsetX: input.stampOffsetX,
+    stampOffsetY: input.stampOffsetY,
+    status: 'draft',
+    createdAt: now,
+    updatedAt: now
+  };
 }
 
 async function generateCustomerIdFromSourceSheet(input: {
