@@ -337,9 +337,11 @@ export function ProjectEditor({
   const receiptPrintRef = useRef<HTMLDivElement | null>(null);
   const reorderCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const dragSessionRef = useRef<{ lineId: string; tab: ReorderTab } | null>(null);
+  const collectionTogglePendingRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [selectionSavePending, setSelectionSavePending] = useState(false);
   const [sheetSyncPending, setSheetSyncPending] = useState(false);
+  const [collectionTogglePendingLineId, setCollectionTogglePendingLineId] = useState<string | null>(null);
   const [showSheetSyncReminder, setShowSheetSyncReminder] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -670,7 +672,7 @@ export function ProjectEditor({
   }, [collectedLines]);
 
   useEffect(() => {
-    setSidebarCollapsed(activeTab === 'invoice');
+    setSidebarCollapsed(activeTab === 'invoice' || activeTab === 'receipt');
     return () => setSidebarCollapsed(false);
   }, [activeTab, setSidebarCollapsed]);
 
@@ -1307,47 +1309,70 @@ export function ProjectEditor({
   }
 
   async function toggleCollected(line: ServiceLine) {
+    if (collectionTogglePendingRef.current) {
+      return;
+    }
+
+    collectionTogglePendingRef.current = line.id;
+    setCollectionTogglePendingLineId(line.id);
     setMessage('');
     setError('');
     const nextStatus = line.collectionStatus === 'collected' ? 'uncollected' : 'collected';
-    const selectionSaved = await saveSelections({
-      selectedIds: selectedLineIds,
-      orderedIds: displayOrderIds,
-      silent: true,
-      refresh: false
-    });
-    if (!selectionSaved) {
-      return;
+    try {
+      const selectionSaved = await saveSelections({
+        selectedIds: selectedLineIds,
+        orderedIds: displayOrderIds,
+        silent: true,
+        refresh: false
+      });
+      if (!selectionSaved) {
+        return;
+      }
+
+      const response = await fetch(`/api/projects/${project.id}/lines/${line.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          serviceDate: line.serviceDate,
+          serviceName: line.serviceName,
+          staffName: line.staffName,
+          price: line.price,
+          quantity: line.quantity,
+          unit: line.unit,
+          taxIncluded: line.taxIncluded,
+          remarks: line.remarks,
+          memo: line.memo,
+          visible: line.visible,
+          collectionStatus: nextStatus,
+          collectedAt: nextStatus === 'collected' ? line.collectedAt : null,
+          receiptIssuedAt: nextStatus === 'collected' ? line.receiptIssuedAt : null
+        })
+      });
+
+      const data = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        setError(data.message || '回収状態を更新できませんでした。');
+        return;
+      }
+
+      const synced = await syncProjectToSheet({
+        successMessage:
+          nextStatus === 'collected'
+            ? '回収済に更新し、Google Sheets に保存しました。'
+            : '未回収へ戻し、Google Sheets に保存しました。',
+        failureMessage:
+          nextStatus === 'collected'
+            ? '回収状態は更新しましたが、Google Sheets への保存に失敗しました。'
+            : '未回収への更新はできましたが、Google Sheets への保存に失敗しました。'
+      });
+      if (!synced) {
+        setShowSheetSyncReminder(true);
+        startTransition(() => router.refresh());
+      }
+    } finally {
+      collectionTogglePendingRef.current = null;
+      setCollectionTogglePendingLineId(null);
     }
-
-    const response = await fetch(`/api/projects/${project.id}/lines/${line.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        serviceDate: line.serviceDate,
-        serviceName: line.serviceName,
-        staffName: line.staffName,
-        price: line.price,
-        quantity: line.quantity,
-        unit: line.unit,
-        taxIncluded: line.taxIncluded,
-        remarks: line.remarks,
-        memo: line.memo,
-        visible: line.visible,
-        collectionStatus: nextStatus,
-        collectedAt: nextStatus === 'collected' ? line.collectedAt : null,
-        receiptIssuedAt: nextStatus === 'collected' ? line.receiptIssuedAt : null
-      })
-    });
-
-    const data = (await response.json()) as { message?: string };
-    if (!response.ok) {
-      setError(data.message || '回収状態を更新できませんでした。');
-      return;
-    }
-
-    setMessage(nextStatus === 'collected' ? '回収済に更新しました。' : '未回収へ戻しました。');
-    startTransition(() => router.refresh());
   }
 
   function downloadProjectCsv() {
@@ -1854,6 +1879,7 @@ export function ProjectEditor({
             orderedUncollectedLines.map((line) => {
               const isSelected = filteredSelectedLineIds.includes(line.id);
               const canDrag = isSelected && selectedUncollectedLines.length > 1;
+              const isCollectionTogglePending = collectionTogglePendingLineId === line.id;
 
               return (
                 <div
@@ -1940,15 +1966,18 @@ export function ProjectEditor({
                       ¥{line.price.toLocaleString('ja-JP')}
                     </div>
                     <button
-                      className={`service-line-action${line.invoiceCode ? ' is-invoiced' : ''}`}
+                      className={`service-line-action${line.invoiceCode ? ' is-invoiced' : ''}${isCollectionTogglePending ? ' is-pending' : ''}`}
                       type="button"
+                      disabled={isCollectionTogglePending}
+                      aria-busy={isCollectionTogglePending}
                       onClick={() => void toggleCollected(line)}
                     >
-                      回収済にする
+                      {isCollectionTogglePending ? '更新中...' : '回収済にする'}
                     </button>
                     <button
                       className="service-line-action"
                       type="button"
+                      disabled={isCollectionTogglePending}
                       onClick={() => openLineEditorDialog(line.id)}
                     >
                       編集する
@@ -1958,6 +1987,185 @@ export function ProjectEditor({
               );
             })
           )}
+        </div>
+        {showDebug ? (
+          <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
+            drag debug: {dragDebug.phase} / source: {dragDebug.sourceLineId || '-'} / target: {dragDebug.targetLineId || '-'}{dragDebug.placement ? ` (${dragDebug.placement})` : ''}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  function renderCollectedPanel(options?: { compact?: boolean; showDebug?: boolean }) {
+    const compact = options?.compact ?? false;
+    const showDebug = options?.showDebug ?? false;
+
+    return (
+      <>
+        {!compact ? <h2>回収済一覧</h2> : null}
+        <div
+          style={{
+            display: 'flex',
+            gap: 12,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            marginBottom: 18
+          }}
+        >
+          <div style={{ fontSize: compact ? 16 : 18, fontWeight: 600 }}>
+            選択した項目 {filteredSelectedReceiptLineIds.length}件
+          </div>
+          {collectedMonthGroups.map(([monthKey, lines]) => {
+            const allSelected = lines.every((line) => filteredSelectedReceiptLineIds.includes(line.id));
+            return (
+              <button
+                key={monthKey}
+                className={`month-chip${allSelected ? ' active' : ''}`}
+                type="button"
+                onClick={() => toggleCollectedMonthSelection(monthKey)}
+              >
+                {monthKey}
+              </button>
+            );
+          })}
+          <button
+            className="month-chip action"
+            type="button"
+            onClick={() => setSelectedReceiptLineIds(orderedCollectedLines.map((line) => line.id))}
+          >
+            全て選択
+          </button>
+          <button className="month-chip action" type="button" onClick={() => setSelectedReceiptLineIds([])}>
+            選択解除
+          </button>
+        </div>
+
+        {selectedCollectedLines.length > 1 ? (
+          <div
+            className="note"
+            style={{
+              marginBottom: 18,
+              background: '#fff2f7',
+              border: '1px solid #efbfd1',
+              color: 'var(--accent-strong)',
+              fontSize: 15,
+              fontWeight: 600,
+              letterSpacing: '0.01em'
+            }}
+          >
+            選択済みカードをドラッグして順番を並び替えできます
+          </div>
+        ) : null}
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          {orderedCollectedLines.map((line) => {
+            const isSelected = filteredSelectedReceiptLineIds.includes(line.id);
+            const canDrag = isSelected && selectedCollectedLines.length > 1;
+            const isCollectionTogglePending = collectionTogglePendingLineId === line.id;
+
+            return (
+              <div
+                key={line.id}
+                ref={(node) => {
+                  reorderCardRefs.current[getCardRefKey('collected', line.id)] = node;
+                }}
+                className={`service-line-card${canDrag ? ' draggable-selected' : ''}${draggingSelectedLineId === line.id ? ' dragging' : ''
+                  }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'before'
+                    ? ' drop-before'
+                    : ''
+                  }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'after'
+                    ? ' drop-after'
+                    : ''
+                  }`}
+                onPointerDown={(event) => {
+                  const target = event.target as HTMLElement;
+                  if (target.closest('button')) return;
+                  beginPointerReorder(event, line.id, 'collected', canDrag);
+                }}
+              >
+                <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                  <button
+                    type="button"
+                    aria-pressed={isSelected}
+                    aria-label={isSelected ? '選択解除' : '選択'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleReceiptLine(line.id);
+                    }}
+                    style={getSelectionToggleStyle(isSelected)}
+                  >
+                    {isSelected ? '✓' : ''}
+                  </button>
+                  <div style={{ minWidth: 0, display: 'block' }}>
+                    {canDrag ? (
+                      <div
+                        data-drag-handle="true"
+                        onPointerDown={(event) =>
+                          beginPointerReorder(event, line.id, 'collected', canDrag)
+                        }
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          minHeight: 32,
+                          paddingRight: 12,
+                          marginBottom: 8,
+                          color: 'var(--muted)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          letterSpacing: '0.04em',
+                          cursor: 'grab',
+                          touchAction: 'none',
+                          userSelect: 'none'
+                        }}
+                      >
+                        DRAG TO REORDER
+                      </div>
+                    ) : null}
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
+                      {line.serviceName}
+                    </div>
+                    <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 14 }}>
+                      {line.serviceDate || '日付未設定'}
+                    </div>
+                    <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                      数量: {line.quantity}
+                      {line.unit} / {line.taxIncluded ? '内税' : '外税'}
+                    </div>
+                    <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                      担当: {line.staffName || '担当未設定'}
+                    </div>
+                    {line.memo ? (
+                      <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                        メモ: {line.memo}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="service-line-side">
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
+                    ¥{line.price.toLocaleString('ja-JP')}
+                  </div>
+                  <button
+                    className={`button-link secondary${isCollectionTogglePending ? ' is-pending' : ''}`}
+                    type="button"
+                    disabled={isCollectionTogglePending}
+                    aria-busy={isCollectionTogglePending}
+                    onClick={() => void toggleCollected(line)}
+                  >
+                    {isCollectionTogglePending ? '更新中...' : '未回収へ戻す'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {collectedLines.length === 0 ? (
+            <p style={{ margin: 0 }}>回収済みの明細はまだありません。</p>
+          ) : null}
         </div>
         {showDebug ? (
           <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
@@ -2396,210 +2604,56 @@ export function ProjectEditor({
           ) : null}
 
           {activeTab === 'collected' ? (
-            <>
-              <h2>回収済一覧</h2>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 12,
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  marginBottom: 18
-                }}
-              >
-                <div style={{ fontSize: 18, fontWeight: 600 }}>選択した項目 {filteredSelectedReceiptLineIds.length}件</div>
-                {collectedMonthGroups.map(([monthKey, lines]) => {
-                  const allSelected = lines.every((line) => filteredSelectedReceiptLineIds.includes(line.id));
-                  return (
-                    <button
-                      key={monthKey}
-                      className={`month-chip${allSelected ? ' active' : ''}`}
-                      type="button"
-                      onClick={() => toggleCollectedMonthSelection(monthKey)}
-                    >
-                      {monthKey}
-                    </button>
-                  );
-                })}
-                <button
-                  className="month-chip action"
-                  type="button"
-                  onClick={() => setSelectedReceiptLineIds(orderedCollectedLines.map((line) => line.id))}
-                >
-                  全て選択
-                </button>
-                <button className="month-chip action" type="button" onClick={() => setSelectedReceiptLineIds([])}>
-                  選択解除
-                </button>
-              </div>
-
-              {selectedCollectedLines.length > 1 ? (
-                <div
-                  className="note"
-                  style={{
-                    marginBottom: 18,
-                    background: '#fff2f7',
-                    border: '1px solid #efbfd1',
-                    color: 'var(--accent-strong)',
-                    fontSize: 15,
-                    fontWeight: 600,
-                    letterSpacing: '0.01em'
-                  }}
-                >
-                  選択済みカードをドラッグして順番を並び替えできます
-                </div>
-              ) : null}
-
-              <div style={{ display: 'grid', gap: 10 }}>
-                {orderedCollectedLines.map((line) => {
-                  const isSelected = filteredSelectedReceiptLineIds.includes(line.id);
-                  const canDrag = isSelected && selectedCollectedLines.length > 1;
-
-                  return (
-                    <div
-                      key={line.id}
-                      ref={(node) => {
-                        reorderCardRefs.current[getCardRefKey('collected', line.id)] = node;
-                      }}
-                      className={`service-line-card${canDrag ? ' draggable-selected' : ''}${draggingSelectedLineId === line.id ? ' dragging' : ''
-                        }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'before'
-                          ? ' drop-before'
-                          : ''
-                        }${dragOverTarget?.lineId === line.id && dragOverTarget.placement === 'after'
-                          ? ' drop-after'
-                          : ''
-                        }`}
-                      onPointerDown={(event) => {
-                        const target = event.target as HTMLElement;
-                        if (target.closest('button')) return;
-                        beginPointerReorder(event, line.id, 'collected', canDrag);
-                      }}
-                    >
-                      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                        <button
-                          type="button"
-                          aria-pressed={isSelected}
-                          aria-label={isSelected ? '選択解除' : '選択'}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleReceiptLine(line.id);
-                          }}
-                          style={getSelectionToggleStyle(isSelected)}
-                        >
-                          {isSelected ? '✓' : ''}
-                        </button>
-                        <div style={{ minWidth: 0, display: 'block' }}>
-                          {canDrag ? (
-                            <div
-                              data-drag-handle="true"
-                              onPointerDown={(event) =>
-                                beginPointerReorder(event, line.id, 'collected', canDrag)
-                              }
-                              onContextMenu={(event) => {
-                                event.preventDefault();
-                              }}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                minHeight: 32,
-                                paddingRight: 12,
-                                marginBottom: 8,
-                                color: 'var(--muted)',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                letterSpacing: '0.04em',
-                                cursor: 'grab',
-                                touchAction: 'none',
-                                userSelect: 'none'
-                              }}
-                            >
-                              DRAG TO REORDER
-                            </div>
-                          ) : null}
-                          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
-                            {line.serviceName}
-                          </div>
-                          <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 14 }}>
-                            {line.serviceDate || '日付未設定'}
-                          </div>
-                          <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                            数量: {line.quantity}
-                            {line.unit} / {line.taxIncluded ? '内税' : '外税'}
-                          </div>
-                          <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                            担当: {line.staffName || '担当未設定'}
-                          </div>
-                          {line.memo ? (
-                            <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                              メモ: {line.memo}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="service-line-side">
-                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
-                          ¥{line.price.toLocaleString('ja-JP')}
-                        </div>
-                        <button
-                          className="button-link secondary"
-                          type="button"
-                          onClick={() => void toggleCollected(line)}
-                        >
-                          未回収へ戻す
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {collectedLines.length === 0 ? (
-                  <p style={{ margin: 0 }}>回収済みの明細はまだありません。</p>
-                ) : null}
-              </div>
-              <div className="note" style={{ marginTop: 12, fontSize: 12 }}>
-                drag debug: {dragDebug.phase} / source: {dragDebug.sourceLineId || '-'} / target: {dragDebug.targetLineId || '-'}{dragDebug.placement ? ` (${dragDebug.placement})` : ''}
-              </div>
-            </>
+            renderCollectedPanel({ showDebug: true })
           ) : null}
 
           {activeTab === 'receipt' ? (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-                <h2 style={{ margin: 0 }}>領収書プレビュー</h2>
-                <button className="button-link secondary" type="button" onClick={() => openPrintWindow('receipt')}>
-                  印刷 / PDF
-                </button>
+              <div className="invoice-preview-layout">
+                <section className="invoice-preview-sidebar">
+                  <h2 style={{ margin: '0 0 14px' }}>回収済</h2>
+                  {renderCollectedPanel({ compact: true })}
+                </section>
+
+                <section className="invoice-preview-main">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                    <h2 style={{ margin: 0 }}>領収書プレビュー</h2>
+                    <button className="button-link secondary" type="button" onClick={() => openPrintWindow('receipt')}>
+                      印刷 / PDF
+                    </button>
+                  </div>
+                  {collectedLines.length === 0 ? (
+                    <p>回収済みの明細がありません。</p>
+                  ) : receiptLines.length === 0 ? (
+                    <p>領収書に含める回収済明細を選ぶと、ここに領収書が表示されます。</p>
+                  ) : (
+                    <div ref={receiptPrintRef}>
+                      <InvoicePreview
+                        config={config}
+                        project={previewProject}
+                        lines={previewReceiptLines}
+                        kind="receipt"
+                        stampRenderKey={printRenderNonce}
+                        allowIssuerResize
+                        allowStampReposition
+                        onIssuerWidthChange={(width) =>
+                          setForm((current) => ({
+                            ...current,
+                            issuerBoxWidth: width
+                          }))
+                        }
+                        onStampPositionChange={(position) =>
+                          setForm((current) => ({
+                            ...current,
+                            stampOffsetX: position.x,
+                            stampOffsetY: position.y
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
+                </section>
               </div>
-              {collectedLines.length === 0 ? (
-                <p>回収済みの明細がありません。</p>
-              ) : receiptLines.length === 0 ? (
-                <p>領収書に含める回収済明細を選ぶと、ここに領収書が表示されます。</p>
-              ) : (
-                <div ref={receiptPrintRef}>
-                  <InvoicePreview
-                    config={config}
-                    project={previewProject}
-                    lines={previewReceiptLines}
-                    kind="receipt"
-                    stampRenderKey={printRenderNonce}
-                    allowIssuerResize
-                    allowStampReposition
-                    onIssuerWidthChange={(width) =>
-                      setForm((current) => ({
-                        ...current,
-                        issuerBoxWidth: width
-                      }))
-                    }
-                    onStampPositionChange={(position) =>
-                      setForm((current) => ({
-                        ...current,
-                        stampOffsetX: position.x,
-                        stampOffsetY: position.y
-                      }))
-                    }
-                  />
-                </div>
-              )}
             </>
           ) : null}
         </article>
