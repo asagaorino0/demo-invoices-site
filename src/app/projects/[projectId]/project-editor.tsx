@@ -97,6 +97,30 @@ function orderLinesByIds(lines: ServiceLine[], orderIds: string[]): ServiceLine[
   return [...ordered, ...remaining];
 }
 
+function reconcileOrderIds(currentIds: string[], allLineIds: string[]): string[] {
+  const nextIds: string[] = [];
+  const seen = new Set<string>();
+  const allLineIdSet = new Set(allLineIds);
+
+  for (const id of currentIds) {
+    if (!allLineIdSet.has(id) || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    nextIds.push(id);
+  }
+
+  for (const id of allLineIds) {
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    nextIds.push(id);
+  }
+
+  return nextIds;
+}
+
 function buildUncollectedDisplayOrderIds(
   serviceLines: ServiceLine[],
   invoiceSelections: InvoiceSelection[]
@@ -785,6 +809,11 @@ export function ProjectEditor({
 
   useEffect(() => {
     const serviceLineIds = new Set(serviceLines.map((line) => line.id));
+    const uncollectedServiceLineIds = new Set(
+      serviceLines
+        .filter((line) => line.collectionStatus === 'uncollected')
+        .map((line) => line.id)
+    );
     const nextSelectedLineIds = invoiceSelections
       .filter(
         (item) =>
@@ -793,9 +822,16 @@ export function ProjectEditor({
           serviceLines.some((line) => line.id === item.lineId && line.collectionStatus === 'uncollected')
       )
       .map((item) => item.lineId);
+    const nextDisplayOrderIds = buildGlobalDisplayOrderIds(serviceLines, invoiceSelections);
 
-    setSelectedLineIds(nextSelectedLineIds);
-    setDisplayOrderIds(buildGlobalDisplayOrderIds(serviceLines, invoiceSelections));
+    setSelectedLineIds((current) =>
+      hasSelectionChanges
+        ? current.filter((id) => serviceLineIds.has(id) && uncollectedServiceLineIds.has(id))
+        : nextSelectedLineIds
+    );
+    setDisplayOrderIds((current) =>
+      hasSelectionChanges ? reconcileOrderIds(current, serviceLines.map((line) => line.id)) : nextDisplayOrderIds
+    );
 
     const collectedIds = serviceLines
       .filter((line) => line.collectionStatus === 'collected')
@@ -846,7 +882,7 @@ export function ProjectEditor({
         }
         : null
     );
-  }, [editingLineId, invoiceSelections, lineEditorDialogOpen, serviceLines]);
+  }, [editingLineId, hasSelectionChanges, invoiceSelections, lineEditorDialogOpen, serviceLines]);
 
   function syncLineForm(lineId: string) {
     const line = serviceLines.find((item) => item.id === lineId);
