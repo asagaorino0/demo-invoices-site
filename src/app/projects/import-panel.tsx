@@ -68,6 +68,9 @@ export function ImportPanel({
   const hasSourceSpreadsheet = Boolean(setting);
   const hasSpreadsheetTitle = form.spreadsheetTitle.trim().length > 0;
   const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
+  const spreadsheetHref = setting?.spreadsheetId
+    ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(setting.spreadsheetId)}/edit`
+    : null;
 
   useEffect(() => {
     if (pathname !== '/source-sheet') {
@@ -337,7 +340,23 @@ export function ImportPanel({
           <div className="source-meta">
             現在のスプレッドシート:
             {' '}
-            <strong style={{ color: 'var(--accent-strong)' }}>{initialSpreadsheetTitle || '名称未取得'}</strong>
+            {spreadsheetHref ? (
+              <a
+                href={spreadsheetHref}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: 'var(--accent-strong)',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '0.12em'
+                }}
+              >
+                {initialSpreadsheetTitle || '名称未取得'}
+              </a>
+            ) : (
+              <strong style={{ color: 'var(--accent-strong)' }}>{initialSpreadsheetTitle || '名称未取得'}</strong>
+            )}
           </div>
           {/* <div className="source-meta">
             参照しているシート:
