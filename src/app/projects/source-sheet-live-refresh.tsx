@@ -17,6 +17,14 @@ export function SourceSheetLiveRefresh({ enabled }: { enabled: boolean }) {
     let disposed = false;
 
     function isUserInteracting(): boolean {
+      if (document.body?.dataset.printDialogOpen === 'true') {
+        return true;
+      }
+
+      if (document.body?.dataset.selectionDirty === 'true') {
+        return true;
+      }
+
       if (document.querySelector('[aria-modal="true"], [role="dialog"]')) {
         return true;
       }

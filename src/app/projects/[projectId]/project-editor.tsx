@@ -188,6 +188,79 @@ function isDraftLineId(lineId: string): boolean {
   return lineId.startsWith(DRAFT_LINE_ID_PREFIX);
 }
 
+function sanitizeDocumentFilePart(value: string): string {
+  return String(value || '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatDocumentFileMonth(value: string | null | undefined): string {
+  return String(value || '').replace(/-/g, '').slice(0, 6) || 'undated';
+}
+
+function getLatestDocumentMonthFromLines(
+  lines: Array<Pick<ServiceLine, 'serviceDate' | 'collectedAt' | 'receiptIssuedAt'>>
+): string {
+  const latestDate = lines
+    .flatMap((line) => [line.receiptIssuedAt, line.collectedAt, line.serviceDate])
+    .map((value) => String(value || '').trim())
+    .filter((value) => /^\d{4}-\d{2}(-\d{2})?$/.test(value))
+    .sort()
+    .slice(-1)[0];
+
+  return latestDate ? formatDocumentFileMonth(latestDate) : '';
+}
+
+async function waitForPrintableAssets(root: ParentNode): Promise<void> {
+  const images = Array.from(root.querySelectorAll('img'));
+
+  if (images.length === 0) {
+    return;
+  }
+
+  await Promise.all(
+    images.map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          if (image.complete && image.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+
+          const finish = () => {
+            image.removeEventListener('load', finish);
+            image.removeEventListener('error', finish);
+            resolve();
+          };
+
+          image.addEventListener('load', finish, { once: true });
+          image.addEventListener('error', finish, { once: true });
+          window.setTimeout(finish, 1500);
+        })
+    )
+  );
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function buildPrintDocumentTitle(input: {
+  issuerName: string;
+  kind: 'invoice' | 'receipt';
+  issueDate?: string | null;
+  monthOverride?: string;
+  invoiceRecipient: string;
+}): string {
+  const title = input.kind === 'invoice' ? '請求書' : '領収書';
+  const issuerName = sanitizeDocumentFilePart(input.issuerName) || 'issuer';
+  const invoiceRecipient = sanitizeDocumentFilePart(input.invoiceRecipient) || 'recipient';
+  const month = input.monthOverride || formatDocumentFileMonth(input.issueDate);
+  return `${issuerName}_${title}_${month}_${invoiceRecipient}`;
+}
+
 function inferInvoiceRecipientMode(form: {
   customerName: string;
   companyName: string;
@@ -406,6 +479,21 @@ export function ProjectEditor({
   const orderedCollectedLines = useMemo(() => {
     return orderLinesByIds(collectedLines, displayOrderIds);
   }, [collectedLines, displayOrderIds]);
+  const savedSelectedLineIds = useMemo(
+    () =>
+      invoiceSelections
+        .filter(
+          (item) =>
+            item.selectedForInvoice &&
+            serviceLines.some((line) => line.id === item.lineId && line.collectionStatus === 'uncollected')
+        )
+        .map((item) => item.lineId),
+    [invoiceSelections, serviceLines]
+  );
+  const savedDisplayOrderIds = useMemo(
+    () => buildGlobalDisplayOrderIds(serviceLines, invoiceSelections),
+    [invoiceSelections, serviceLines]
+  );
   const filteredSelectedLineIds = useMemo(() => {
     const uncollectedIds = new Set(uncollectedLines.map((line) => line.id));
     return selectedLineIds.filter((id) => uncollectedIds.has(id));
@@ -471,9 +559,29 @@ export function ProjectEditor({
     () => getInvoiceIssueDate(previewProject, invoiceLines) || '',
     [invoiceLines, previewProject]
   );
+  const invoicePrintContextLines = useMemo(() => {
+    if (selectedUncollectedLines.length > 0) {
+      return selectedUncollectedLines;
+    }
+    if (orderedUncollectedLines.length > 0) {
+      return orderedUncollectedLines;
+    }
+    return serviceLines;
+  }, [orderedUncollectedLines, selectedUncollectedLines, serviceLines]);
   const resolvedIssueDate = useMemo(
     () => getInvoiceIssueDate(previewProject, serviceLines) || '',
     [previewProject, serviceLines]
+  );
+  const invoicePrintIssueDate = useMemo(
+    () => getInvoiceIssueDate(previewProject, invoicePrintContextLines) || resolvedIssueDate || form.issueDate || '',
+    [form.issueDate, invoicePrintContextLines, previewProject, resolvedIssueDate]
+  );
+  const invoicePrintMonth = useMemo(
+    () =>
+      (invoicePrintIssueDate ? formatDocumentFileMonth(invoicePrintIssueDate) : '') ||
+      getLatestDocumentMonthFromLines(invoicePrintContextLines) ||
+      '',
+    [invoicePrintContextLines, invoicePrintIssueDate]
   );
   const displayedIssueDate =
     form.defaultInvoiceDateMode === 'custom'
@@ -486,9 +594,19 @@ export function ProjectEditor({
   );
   const [receiptDate, setReceiptDate] = useState(resolvedReceiptDate);
   const [savedReceiptDate, setSavedReceiptDate] = useState(resolvedReceiptDate);
+  const receiptPrintMonth = useMemo(
+    () =>
+      (receiptDate || resolvedReceiptDate ? formatDocumentFileMonth(receiptDate || resolvedReceiptDate) : '') ||
+      getLatestDocumentMonthFromLines(receiptContextLines) ||
+      '',
+    [receiptContextLines, receiptDate, resolvedReceiptDate]
+  );
   const isReceiptDateDirty = receiptDate !== savedReceiptDate;
+  const hasSelectionChanges =
+    !areStringArraysEqual(filteredSelectedLineIds, savedSelectedLineIds) ||
+    !areStringArraysEqual(displayOrderIds, savedDisplayOrderIds);
   const needsInitialSheetSync = sheetSyncStatus !== 'exported';
-  const canSyncToSheet = isHeaderDirty || isReceiptDateDirty || needsInitialSheetSync;
+  const canSyncToSheet = isHeaderDirty || isReceiptDateDirty || hasSelectionChanges || needsInitialSheetSync;
   const isSheetSyncComplete = !sheetSyncPending && !canSyncToSheet;
   const sheetSyncButtonStyle =
     isSheetSyncComplete
@@ -535,6 +653,22 @@ export function ProjectEditor({
   useEffect(() => {
     dragOverTargetRef.current = dragOverTarget;
   }, [dragOverTarget]);
+
+  useEffect(() => {
+    if (!document.body) {
+      return;
+    }
+
+    if (hasSelectionChanges) {
+      document.body.dataset.selectionDirty = 'true';
+    } else {
+      delete document.body.dataset.selectionDirty;
+    }
+
+    return () => {
+      delete document.body.dataset.selectionDirty;
+    };
+  }, [hasSelectionChanges]);
 
   useEffect(() => {
     const nextHeader = {
@@ -1495,7 +1629,15 @@ export function ProjectEditor({
     const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
       .map((element) => element.outerHTML)
       .join('\n');
-    const title = kind === 'invoice' ? '請求書' : '領収書';
+    const title = buildPrintDocumentTitle({
+      issuerName: config.issuerName,
+      kind,
+      issueDate: kind === 'invoice' ? invoicePrintIssueDate : receiptDate || resolvedReceiptDate,
+      monthOverride: kind === 'invoice' ? invoicePrintMonth : receiptPrintMonth,
+      invoiceRecipient: previewProject.invoiceRecipient
+    });
+    const previousDocumentTitle = document.title;
+    const previousPrintDialogState = document.body?.dataset.printDialogOpen;
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
     iframe.style.position = 'fixed';
@@ -1513,6 +1655,11 @@ export function ProjectEditor({
       setError('印刷ウィンドウを準備できませんでした。');
       return;
     }
+
+    if (document.body) {
+      document.body.dataset.printDialogOpen = 'true';
+    }
+    document.title = title;
 
     const printDocument = iframeWindow.document;
 
@@ -1540,23 +1687,43 @@ export function ProjectEditor({
     const printShell = printDocument.querySelector('.print-shell');
     if (!printShell) {
       setError('印刷内容の組み立てに失敗しました。');
+      document.title = previousDocumentTitle;
+      if (document.body) {
+        if (previousPrintDialogState == null) {
+          delete document.body.dataset.printDialogOpen;
+        } else {
+          document.body.dataset.printDialogOpen = previousPrintDialogState;
+        }
+      }
       iframe.remove();
       return;
     }
 
     printShell.appendChild(printDocument.importNode(target, true));
+    await waitForPrintableAssets(printDocument);
+
+    if ('fonts' in printDocument) {
+      await (printDocument as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready?.catch(() => undefined);
+    }
+
     iframeWindow.focus();
     iframeWindow.addEventListener(
       'afterprint',
       () => {
+        document.title = previousDocumentTitle;
+        if (document.body) {
+          if (previousPrintDialogState == null) {
+            delete document.body.dataset.printDialogOpen;
+          } else {
+            document.body.dataset.printDialogOpen = previousPrintDialogState;
+          }
+        }
         setPrintRenderNonce((current) => current + 1);
         iframe.remove();
       },
       { once: true }
     );
-    window.setTimeout(() => {
-      iframeWindow.print();
-    }, 250);
+    iframeWindow.print();
   }
 
   function renderUncollectedPanel(options?: { compact?: boolean; showDebug?: boolean }) {
