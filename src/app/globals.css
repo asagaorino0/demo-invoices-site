@@ -313,7 +313,19 @@ a {
   margin-bottom: 16px;
 }
 
+.invoice-preview-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 14px;
+  align-items: start;
+}
+
 .invoice-preview-subject-control {
+  display: grid;
+  gap: 6px;
+}
+
+.invoice-preview-date-control {
   display: grid;
   gap: 6px;
 }
@@ -343,6 +355,12 @@ a {
 
 .invoice-preview-position-actions .button-link {
   width: auto;
+}
+
+@media (max-width: 900px) {
+  .invoice-preview-control-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .workbench-sidebar .card,

@@ -2546,20 +2546,38 @@ export function ProjectEditor({
                   ) : null} */}
                   {invoiceLines.length > 0 ? (
                     <div className="invoice-preview-controls">
-                      <label className="invoice-preview-subject-control">
-                        <span className="invoice-preview-subject-label">件名</span>
-                        <input
-                          value={form.subject}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, subject: event.target.value }))
-                          }
-                          placeholder="請求書に表示する件名"
-                          style={inputStyle}
-                        />
-                        <span className="invoice-preview-subject-help">
-                          プレビュー、印刷 / PDF、スプレッドシート保存に反映されます。
-                        </span>
-                      </label>
+                      <div className="invoice-preview-control-row">
+                        <label className="invoice-preview-subject-control">
+                          <span className="invoice-preview-subject-label">件名</span>
+                          <input
+                            value={form.subject}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, subject: event.target.value }))
+                            }
+                            placeholder="請求書に表示する件名"
+                            style={inputStyle}
+                          />
+                          <span className="invoice-preview-subject-help">
+                            プレビュー、印刷 / PDF、スプレッドシート保存に反映されます。
+                          </span>
+                        </label>
+                        {form.defaultInvoiceDateMode === 'custom' ? (
+                          <label className="invoice-preview-date-control">
+                            <span className="invoice-preview-subject-label">発行日</span>
+                            <input
+                              type="date"
+                              value={form.issueDate}
+                              onChange={(event) =>
+                                setForm((current) => ({ ...current, issueDate: event.target.value }))
+                              }
+                              style={inputStyle}
+                            />
+                            <span className="invoice-preview-subject-help">
+                              日付指定のときだけ請求書の発行日に反映されます。
+                            </span>
+                          </label>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                   {invoiceLines.length === 0 ? (
@@ -2627,30 +2645,48 @@ export function ProjectEditor({
                   ) : receiptLines.length === 0 ? (
                     <p>領収書に含める回収済明細を選ぶと、ここに領収書が表示されます。</p>
                   ) : (
-                    <div ref={receiptPrintRef}>
-                      <InvoicePreview
-                        config={config}
-                        project={previewProject}
-                        lines={previewReceiptLines}
-                        kind="receipt"
-                        stampRenderKey={printRenderNonce}
-                        allowIssuerResize
-                        allowStampReposition
-                        onIssuerWidthChange={(width) =>
-                          setForm((current) => ({
-                            ...current,
-                            issuerBoxWidth: width
-                          }))
-                        }
-                        onStampPositionChange={(position) =>
-                          setForm((current) => ({
-                            ...current,
-                            stampOffsetX: position.x,
-                            stampOffsetY: position.y
-                          }))
-                        }
-                      />
-                    </div>
+                    <>
+                      <div className="invoice-preview-controls">
+                        <div className="invoice-preview-control-row">
+                          <label className="invoice-preview-date-control">
+                            <span className="invoice-preview-subject-label">領収書発行日</span>
+                            <input
+                              type="date"
+                              value={receiptDate}
+                              onChange={(event) => setReceiptDate(event.target.value)}
+                              style={inputStyle}
+                            />
+                            <span className="invoice-preview-subject-help">
+                              プレビュー、印刷 / PDF、スプレッドシート保存に反映されます。
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                      <div ref={receiptPrintRef}>
+                        <InvoicePreview
+                          config={config}
+                          project={previewProject}
+                          lines={previewReceiptLines}
+                          kind="receipt"
+                          stampRenderKey={printRenderNonce}
+                          allowIssuerResize
+                          allowStampReposition
+                          onIssuerWidthChange={(width) =>
+                            setForm((current) => ({
+                              ...current,
+                              issuerBoxWidth: width
+                            }))
+                          }
+                          onStampPositionChange={(position) =>
+                            setForm((current) => ({
+                              ...current,
+                              stampOffsetX: position.x,
+                              stampOffsetY: position.y
+                            }))
+                          }
+                        />
+                      </div>
+                    </>
                   )}
                 </section>
               </div>
