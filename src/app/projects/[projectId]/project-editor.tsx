@@ -287,6 +287,49 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function buildLineFormValue(line: ServiceLine | null) {
+  return line
+    ? {
+      serviceDate: line.serviceDate || '',
+      serviceName: line.serviceName,
+      staffName: line.staffName,
+      price: String(line.price),
+      quantity: String(line.quantity),
+      unit: line.unit,
+      taxIncluded: line.taxIncluded,
+      remarks: line.remarks,
+      memo: line.memo,
+      visible: line.visible,
+      collectionStatus: line.collectionStatus,
+      collectedAt: line.collectedAt || '',
+      receiptIssuedAt: line.receiptIssuedAt || ''
+    }
+    : null;
+}
+
+function areLineFormsEqual(
+  left: ReturnType<typeof buildLineFormValue>,
+  right: ReturnType<typeof buildLineFormValue>
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return left === right;
+  return (
+    left.serviceDate === right.serviceDate &&
+    left.serviceName === right.serviceName &&
+    left.staffName === right.staffName &&
+    left.price === right.price &&
+    left.quantity === right.quantity &&
+    left.unit === right.unit &&
+    left.taxIncluded === right.taxIncluded &&
+    left.remarks === right.remarks &&
+    left.memo === right.memo &&
+    left.visible === right.visible &&
+    left.collectionStatus === right.collectionStatus &&
+    left.collectedAt === right.collectedAt &&
+    left.receiptIssuedAt === right.receiptIssuedAt
+  );
+}
+
 function buildPrintDocumentTitle(input: {
   issuerName: string;
   kind: 'invoice' | 'receipt';
@@ -451,23 +494,7 @@ export function ProjectEditor({
     [editingLineId, editingLineOverride, serviceLines]
   );
   const [lineForm, setLineForm] = useState(() =>
-    editingLine
-      ? {
-        serviceDate: editingLine.serviceDate || '',
-        serviceName: editingLine.serviceName,
-        staffName: editingLine.staffName,
-        price: String(editingLine.price),
-        quantity: String(editingLine.quantity),
-        unit: editingLine.unit,
-        taxIncluded: editingLine.taxIncluded,
-        remarks: editingLine.remarks,
-        memo: editingLine.memo,
-        visible: editingLine.visible,
-        collectionStatus: editingLine.collectionStatus,
-        collectedAt: editingLine.collectedAt || '',
-        receiptIssuedAt: editingLine.receiptIssuedAt || ''
-      }
-      : null
+    buildLineFormValue(editingLine)
   );
   const invoiceRecipientOptions = buildInvoiceRecipientOptions(form);
   const isHeaderDirty =
@@ -764,10 +791,18 @@ export function ProjectEditor({
       if ((editingLineOverride && lineForm) || (lineEditorDialogOpen && currentEditingLine)) {
         return;
       }
-      setEditingLineId('');
-      setLineForm(null);
-      setLineEditorDialogOpen(false);
-      setEditingLineOverride(null);
+      if (editingLineId !== '') {
+        setEditingLineId('');
+      }
+      if (lineForm !== null) {
+        setLineForm(null);
+      }
+      if (lineEditorDialogOpen) {
+        setLineEditorDialogOpen(false);
+      }
+      if (editingLineOverride !== null) {
+        setEditingLineOverride(null);
+      }
       return;
     }
 
@@ -791,8 +826,12 @@ export function ProjectEditor({
       return;
     }
 
-    setEditingLineId('');
-    setLineForm(null);
+    if (editingLineId !== '') {
+      setEditingLineId('');
+    }
+    if (lineForm !== null) {
+      setLineForm(null);
+    }
   }, [activeTab, editableLines, editingLineId, editingLineOverride, lineEditorDialogOpen, lineForm, serviceLines]);
 
   useEffect(() => {
@@ -842,14 +881,18 @@ export function ProjectEditor({
       .map((item) => item.lineId);
     const nextDisplayOrderIds = buildGlobalDisplayOrderIds(serviceLines, invoiceSelections);
 
-    setSelectedLineIds((current) =>
-      hasSelectionChanges
+    setSelectedLineIds((current) => {
+      const nextIds = hasSelectionChanges
         ? current.filter((id) => serviceLineIds.has(id) && uncollectedServiceLineIds.has(id))
-        : nextSelectedLineIds
-    );
-    setDisplayOrderIds((current) =>
-      hasSelectionChanges ? reconcileOrderIds(current, serviceLines.map((line) => line.id)) : nextDisplayOrderIds
-    );
+        : nextSelectedLineIds;
+      return areStringArraysEqual(current, nextIds) ? current : nextIds;
+    });
+    setDisplayOrderIds((current) => {
+      const nextIds = hasSelectionChanges
+        ? reconcileOrderIds(current, serviceLines.map((line) => line.id))
+        : nextDisplayOrderIds;
+      return areStringArraysEqual(current, nextIds) ? current : nextIds;
+    });
 
     const collectedIds = serviceLines
       .filter((line) => line.collectionStatus === 'collected')
@@ -857,13 +900,15 @@ export function ProjectEditor({
     setSelectedReceiptLineIds((current) => {
       const nextCollectedOrderIds = buildCollectedDisplayOrderIds(serviceLines, invoiceSelections);
       const preservedIds = nextCollectedOrderIds.filter((id) => current.includes(id));
+      let nextIds: string[];
       if (preservedIds.length > 0) {
-        return preservedIds;
+        nextIds = preservedIds;
+      } else if (current.length === 0 && collectedIds.length === 1) {
+        nextIds = collectedIds;
+      } else {
+        nextIds = [];
       }
-      if (current.length === 0 && collectedIds.length === 1) {
-        return collectedIds;
-      }
-      return [];
+      return areStringArraysEqual(current, nextIds) ? current : nextIds;
     });
 
     if (lineEditorDialogOpen && lineForm) {
@@ -873,58 +918,28 @@ export function ProjectEditor({
     const nextEditingLineId =
       editingLineId && serviceLineIds.has(editingLineId)
         ? editingLineId
-        : serviceLines.length === 1
-          ? serviceLines[0]?.id || ''
+        : editableLines.length === 1
+          ? editableLines[0]?.id || ''
           : '';
-    setEditingLineId(nextEditingLineId);
+    if (editingLineId !== nextEditingLineId) {
+      setEditingLineId(nextEditingLineId);
+    }
 
     const nextEditingLine =
       serviceLines.find((line) => line.id === nextEditingLineId) ||
-      (serviceLines.length === 1 ? serviceLines[0] || null : null);
-    setLineForm(
-      nextEditingLine
-        ? {
-          serviceDate: nextEditingLine.serviceDate || '',
-          serviceName: nextEditingLine.serviceName,
-          staffName: nextEditingLine.staffName,
-          price: String(nextEditingLine.price),
-          quantity: String(nextEditingLine.quantity),
-          unit: nextEditingLine.unit,
-          taxIncluded: nextEditingLine.taxIncluded,
-          remarks: nextEditingLine.remarks,
-          memo: nextEditingLine.memo,
-          visible: nextEditingLine.visible,
-          collectionStatus: nextEditingLine.collectionStatus,
-          collectedAt: nextEditingLine.collectedAt || '',
-          receiptIssuedAt: nextEditingLine.receiptIssuedAt || ''
-        }
-        : null
-    );
-  }, [editingLineId, hasSelectionChanges, invoiceSelections, lineEditorDialogOpen, serviceLines]);
+      (editableLines.length === 1 ? editableLines[0] || null : null);
+    const nextLineForm = buildLineFormValue(nextEditingLine);
+    if (!areLineFormsEqual(lineForm, nextLineForm)) {
+      setLineForm(nextLineForm);
+    }
+  }, [editableLines, editingLineId, hasSelectionChanges, invoiceSelections, lineEditorDialogOpen, lineForm, serviceLines]);
 
   function syncLineForm(lineId: string) {
     const line = serviceLines.find((item) => item.id === lineId);
     setEditingLineOverride(null);
     setEditingLineId(lineId);
-    setLineForm(
-      line
-        ? {
-          serviceDate: line.serviceDate || '',
-          serviceName: line.serviceName,
-          staffName: line.staffName,
-          price: String(line.price),
-          quantity: String(line.quantity),
-          unit: line.unit,
-          taxIncluded: line.taxIncluded,
-          remarks: line.remarks,
-          memo: line.memo,
-          visible: line.visible,
-          collectionStatus: line.collectionStatus,
-          collectedAt: line.collectedAt || '',
-          receiptIssuedAt: line.receiptIssuedAt || ''
-        }
-        : null
-    );
+    const nextLineForm = buildLineFormValue(line || null);
+    setLineForm((current) => (areLineFormsEqual(current, nextLineForm) ? current : nextLineForm));
   }
 
   function openLineEditorDialog(lineId: string) {
