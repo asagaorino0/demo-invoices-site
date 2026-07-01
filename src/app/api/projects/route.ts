@@ -1,4 +1,4 @@
-import { createProject, listProjectSummaries, markProjectAsExported } from '../../../lib/store/projects';
+import { createProject, listProjectSummaries, markProjectAsExported, upsertProjectSnapshot } from '../../../lib/store/projects';
 import { normalizeCompanyName } from '../../../lib/project-fields';
 import { validateProjectInput } from '../../../lib/validation';
 import { getGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
@@ -94,6 +94,10 @@ export async function POST(request: Request): Promise<Response> {
             sheetName: setting.sheetName,
             historySheetName: setting.historySheetName
           }
+        });
+        await upsertProjectSnapshot({
+          ...project,
+          status: 'exported'
         });
         await markProjectAsExported(project.id).catch(() => undefined);
         const sheetSync = {

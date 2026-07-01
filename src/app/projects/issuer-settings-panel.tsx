@@ -88,11 +88,13 @@ type StampRenderInput = {
 export function IssuerSettingsPanel({
   initialSetting,
   initialValues,
-  withinDialog = false
+  withinDialog = false,
+  onSaved
 }: {
   initialSetting: IssuerSetting | null;
   initialValues?: IssuerFormValues | null;
   withinDialog?: boolean;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const stampFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -276,6 +278,7 @@ export function IssuerSettingsPanel({
     }
 
     setMessage('発行人情報を保存しました。請求書プレビューにも反映されます。');
+    onSaved?.();
     startTransition(() => {
       router.refresh();
     });

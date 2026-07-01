@@ -1027,6 +1027,62 @@ export async function deleteServiceLine(projectId: string, lineId: string): Prom
   }
 }
 
+export async function clearWorkspaceProjectData(): Promise<void> {
+  try {
+    await withTransaction(async (db) => {
+      await db.query('delete from invoice_selections');
+      await db.query('delete from service_lines');
+      await db.query('delete from projects');
+      await db.query('delete from imports');
+    });
+  } catch (error) {
+    if (!shouldUseLocalStore(error)) throw error;
+    const store = await readLocalStore();
+    await writeLocalStore({
+      ...store,
+      projects: [],
+      serviceLines: [],
+      invoiceSelections: []
+    });
+  }
+}
+
+export async function upsertProjectSnapshot(project: Project): Promise<Project> {
+  try {
+    const db = await getDb();
+    await db.query(upsertProjectSql, [
+      project.id,
+      project.importId,
+      project.customerId,
+      project.customerName,
+      project.subject,
+      project.defaultInvoiceDateMode,
+      project.invoiceRecipient,
+      project.facilityName,
+      project.companyName,
+      project.issueDate || '',
+      project.defaultRemarks,
+      project.issuerBoxOffsetX,
+      project.issuerBoxOffsetY,
+      project.issuerBoxWidth,
+      project.stampOffsetX,
+      project.stampOffsetY,
+      project.status,
+      project.createdAt,
+      project.updatedAt
+    ]);
+    return project;
+  } catch (error) {
+    if (!shouldUseLocalStore(error)) throw error;
+    const store = await readLocalStore();
+    await writeLocalStore({
+      ...store,
+      projects: upsertById(store.projects, project)
+    });
+    return project;
+  }
+}
+
 function shouldUseLocalStore(error: unknown): boolean {
   const message = String(error || '');
   return (

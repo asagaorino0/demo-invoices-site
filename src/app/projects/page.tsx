@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { listProjectSummaries, getProjectDetail } from '../../lib/store/projects';
+import { listProjectSummaries, getProjectDetail, upsertProjectSnapshot } from '../../lib/store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, getProjectStatusLabel, type ProjectSummary } from '../../types';
 import { ProjectEditor } from './[projectId]/project-editor';
 import { loadBaseSiteConfig, loadIssuerSheetOverrides, loadSiteConfig } from '../../lib/site-config';
@@ -98,6 +98,10 @@ export default async function ProjectsPage({
     : manualProjectCanOpen
       ? selectedContextBundle
       : null;
+
+  if (hasSourceSpreadsheetSetting && selectedBundle?.project) {
+    await upsertProjectSnapshot(selectedBundle.project).catch(() => undefined);
+  }
 
   const selectedCustomerGroup = hasSourceSpreadsheetSetting
     ? customerGroups.find((group) => group.project.id === activeProjectId) || null

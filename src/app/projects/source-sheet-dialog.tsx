@@ -194,6 +194,7 @@ export function SourceSheetDialog({
                   initialSetting={initialIssuerSetting}
                   initialValues={initialIssuerValues}
                   withinDialog
+                  onSaved={() => setOpen(false)}
                 />
               </>
             ) : null}

@@ -239,13 +239,10 @@ function getLatestDocumentMonthFromLines(
 
 async function waitForPrintableAssets(root: ParentNode): Promise<void> {
   const images = Array.from(root.querySelectorAll('img'));
+  const stylesheets = Array.from(root.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
 
-  if (images.length === 0) {
-    return;
-  }
-
-  await Promise.all(
-    images.map(
+  await Promise.all([
+    ...images.map(
       (image) =>
         new Promise<void>((resolve) => {
           if (image.complete && image.naturalWidth > 0) {
@@ -263,8 +260,27 @@ async function waitForPrintableAssets(root: ParentNode): Promise<void> {
           image.addEventListener('error', finish, { once: true });
           window.setTimeout(finish, 1500);
         })
+    ),
+    ...stylesheets.map(
+      (link) =>
+        new Promise<void>((resolve) => {
+          if ((link.sheet && !link.disabled) || link.href === '') {
+            resolve();
+            return;
+          }
+
+          const finish = () => {
+            link.removeEventListener('load', finish);
+            link.removeEventListener('error', finish);
+            resolve();
+          };
+
+          link.addEventListener('load', finish, { once: true });
+          link.addEventListener('error', finish, { once: true });
+          window.setTimeout(finish, 1500);
+        })
     )
-  );
+  ]);
 }
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
@@ -1688,7 +1704,13 @@ export function ProjectEditor({
     }
 
     const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map((element) => element.outerHTML)
+      .map((element) => {
+        if (element instanceof HTMLLinkElement) {
+          const media = element.media ? ` media="${element.media}"` : '';
+          return `<link rel="stylesheet" href="${element.href}"${media}>`;
+        }
+        return element.outerHTML;
+      })
       .join('\n');
     const title = buildPrintDocumentTitle({
       issuerName: config.issuerName,

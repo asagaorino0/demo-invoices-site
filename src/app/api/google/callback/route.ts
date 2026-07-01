@@ -7,6 +7,7 @@ import {
   verifyGoogleSheetTarget,
   type IssuerSheetSeed
 } from '../../../../lib/google-sheets';
+import { clearWorkspaceProjectData } from '../../../../lib/store/projects';
 import { upsertGoogleSheetSetting } from '../../../../lib/store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../../types';
 
@@ -114,6 +115,8 @@ export async function GET(request: NextRequest) {
       sheetName: created.sheetName,
       historySheetName: created.historySheetName
     });
+
+    await clearWorkspaceProjectData();
 
     await upsertGoogleSheetSetting({
       settingKey: DEFAULT_GOOGLE_SHEET_SETTING_KEY,
