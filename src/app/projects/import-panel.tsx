@@ -206,6 +206,30 @@ export function ImportPanel({
       )}
       <p>この画面で利用する共通の source スプレッドシートを設定します。</p>
 
+      {setting && !(withinDialog && mode === 'existing') ? (
+        <div className="note" style={{ marginTop: 16, marginBottom: 0 }}>
+          現在のスプレッドシート:
+          {' '}
+          {spreadsheetHref ? (
+            <a
+              href={spreadsheetHref}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                color: 'var(--accent-strong)',
+                fontWeight: 700,
+                textDecoration: 'underline',
+                textUnderlineOffset: '0.12em'
+              }}
+            >
+              {initialSpreadsheetTitle || '名称未取得'}
+            </a>
+          ) : (
+            <strong style={{ color: 'var(--accent-strong)' }}>{initialSpreadsheetTitle || '名称未取得'}</strong>
+          )}
+        </div>
+      ) : null}
+
       {withinDialog && !mode ? (
         <div className="dialog-choice-grid">
           <button type="button" className="dialog-choice-button" onClick={() => setMode('existing')}>
@@ -223,13 +247,13 @@ export function ImportPanel({
 
       {mode ? (
         <>
-          {withinDialog ? (
+          {/* {withinDialog ? (
             <div className="hero-actions" style={{ marginTop: 16 }}>
               <button className="button-link secondary" type="button" onClick={() => setMode(null)}>
                 戻る
               </button>
             </div>
-          ) : null}
+          ) : null} */}
 
           <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
             {mode === 'create' ? (
@@ -335,45 +359,11 @@ export function ImportPanel({
       <div className="source-meta" style={{ marginTop: 8 }}>
         新規作成では Google 認証画面へ移動し、あなたの Drive に source / history / 発行者 シートを作成したあとサービスアカウントへ編集権限を付与します。
       </div>
-      {setting ? (
-        <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
-          <div className="source-meta">
-            現在のスプレッドシート:
-            {' '}
-            {spreadsheetHref ? (
-              <a
-                href={spreadsheetHref}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  color: 'var(--accent-strong)',
-                  fontWeight: 700,
-                  textDecoration: 'underline',
-                  textUnderlineOffset: '0.12em'
-                }}
-              >
-                {initialSpreadsheetTitle || '名称未取得'}
-              </a>
-            ) : (
-              <strong style={{ color: 'var(--accent-strong)' }}>{initialSpreadsheetTitle || '名称未取得'}</strong>
-            )}
-          </div>
-          {/* <div className="source-meta">
-            参照しているシート:
-            {' '}
-            <strong style={{ color: 'var(--accent-strong)' }}>{setting.sheetName}</strong>
-          </div> */}
-          {/* <div className="source-meta">
-            スプレッドシート ID:
-            {' '}
-            <code>{setting.spreadsheetId}</code>
-          </div> */}
-        </div>
-      ) : (
+      {!setting ? (
         <div className="source-meta" style={{ marginTop: 12 }}>
           取込元の source スプレッドシートは未設定です。先に連携するスプレッドシートを選んでください。
         </div>
-      )}
+      ) : null}
       {hasIssuerValues(issuerValues) ? (
         <div className="source-meta" style={{ marginTop: 8 }}>
           `konoyubi` から受け取った発行者データは、新規作成を選んだときに発行者シートへ反映されます。

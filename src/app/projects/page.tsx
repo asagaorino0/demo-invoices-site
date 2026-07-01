@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { listProjectSummaries, getProjectDetail } from '../../lib/store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, getProjectStatusLabel, type ProjectSummary } from '../../types';
 import { ProjectEditor } from './[projectId]/project-editor';
-import { loadSiteConfig } from '../../lib/site-config';
+import { loadBaseSiteConfig, loadIssuerSheetOverrides, loadSiteConfig } from '../../lib/site-config';
 import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
+import { getIssuerSetting } from '../../lib/store/issuer-settings';
 import { SourceSheetDialog } from './source-sheet-dialog';
 import { SourceSheetLiveRefresh } from './source-sheet-live-refresh';
 import { NewUserDialog } from './new-user-dialog';
@@ -11,6 +12,7 @@ import { UserInfoDialogTrigger } from './user-info-dialog-trigger';
 import { WorkbenchLayoutShell } from './workbench-layout-shell';
 import { getGoogleSpreadsheetTitle } from '../../lib/google-sheets';
 import { readSourceSheetViewData } from '../../lib/source-sheet-view';
+import { DEFAULT_ISSUER_SETTING_KEY } from '../../types';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +61,14 @@ export default async function ProjectsPage({
       historySheetName: selectedGoogleSheetSetting.historySheetName
     }).catch(() => '')
     : '';
+  const initialIssuerSetting = await getIssuerSetting(DEFAULT_ISSUER_SETTING_KEY).catch(() => null);
+  const baseSiteConfig = await loadBaseSiteConfig().catch(() => null);
+  const issuerSheetValues = selectedGoogleSheetSetting && baseSiteConfig
+    ? await loadIssuerSheetOverrides(baseSiteConfig.issuerSheetName).catch(() => null)
+    : null;
+  const initialIssuerValues = issuerSheetValues ? normalizeIssuerValues(issuerSheetValues) : null;
+  const dialogIssuerSetting = selectedGoogleSheetSetting ? null : initialIssuerSetting;
+  const shouldOpenIssuerDialog = Boolean(selectedGoogleSheetSetting) && !hasIssuerValues(issuerSheetValues);
   const hasSourceSpreadsheetSetting = Boolean(selectedGoogleSheetSetting);
   const visibleProjects = hasSourceSpreadsheetSetting ? projects : [];
   const customerGroups = buildCustomerGroups(visibleProjects);
@@ -111,6 +121,9 @@ export default async function ProjectsPage({
         <SourceSheetDialog
           initialSetting={selectedGoogleSheetSetting}
           initialSpreadsheetTitle={selectedGoogleSpreadsheetTitle}
+          initialIssuerSetting={dialogIssuerSetting}
+          initialIssuerValues={initialIssuerValues}
+          shouldOpenIssuerDialog={shouldOpenIssuerDialog}
         />
         {/* <p className="eyebrow">INVOICE WORKBENCH</p> */}
         {/* <h1 className="page-title-static">スプシで請求書</h1> */}
@@ -280,6 +293,67 @@ export default async function ProjectsPage({
       </WorkbenchLayoutShell>
     </main>
   );
+}
+
+function hasIssuerValues(
+  values:
+    | {
+      issuerName?: string;
+      issuerPostalCode?: string;
+      issuerAddress?: string;
+      issuerContact?: string;
+      issuerEmail?: string;
+      issuerInvoiceNumber?: string;
+      issuerRepresentativeName?: string;
+      issuerRepresentativeTitle?: string;
+      issuerStampUrl?: string;
+      bankNote?: string;
+    }
+    | null
+    | undefined
+): boolean {
+  if (!values) {
+    return false;
+  }
+
+  return [
+    values.issuerName,
+    values.issuerPostalCode,
+    values.issuerAddress,
+    values.issuerContact,
+    values.issuerEmail,
+    values.issuerInvoiceNumber,
+    values.issuerRepresentativeName,
+    values.issuerRepresentativeTitle,
+    values.issuerStampUrl,
+    values.bankNote
+  ].some((value) => String(value || '').trim().length > 0);
+}
+
+function normalizeIssuerValues(values: {
+  issuerName?: string;
+  issuerPostalCode?: string;
+  issuerAddress?: string;
+  issuerContact?: string;
+  issuerEmail?: string;
+  issuerInvoiceNumber?: string;
+  issuerRepresentativeName?: string;
+  issuerRepresentativeTitle?: string;
+  issuerStampUrl?: string;
+  bankNote?: string;
+}) {
+  return {
+    issuerName: String(values.issuerName || '').trim(),
+    issuerPostalCode: String(values.issuerPostalCode || '').trim(),
+    issuerAddress: String(values.issuerAddress || '').trim(),
+    issuerContact: String(values.issuerContact || '').trim(),
+    issuerEmail: String(values.issuerEmail || '').trim(),
+    issuerInvoiceNumber: String(values.issuerInvoiceNumber || '').trim(),
+    issuerRepresentativeName: String(values.issuerRepresentativeName || '').trim(),
+    issuerRepresentativeTitle: String(values.issuerRepresentativeTitle || '').trim(),
+    issuerStampUrl: String(values.issuerStampUrl || '').trim(),
+    bankNote: String(values.bankNote || '').trim()
+  };
 }
 
 function buildCustomerGroups(projects: ProjectSummary[]) {

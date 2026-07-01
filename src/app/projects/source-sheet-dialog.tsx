@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, type SVGProps } from 'react';
-import type { GoogleSheetSetting } from '../../types';
+import type { GoogleSheetSetting, IssuerSetting, SiteConfig } from '../../types';
 import { ImportPanel } from './import-panel';
+import { IssuerSettingsPanel } from './issuer-settings-panel';
 
 function MenuIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -26,12 +27,35 @@ function MenuIcon(props: SVGProps<SVGSVGElement>) {
 
 export function SourceSheetDialog({
   initialSetting,
-  initialSpreadsheetTitle
+  initialSpreadsheetTitle,
+  initialIssuerSetting,
+  initialIssuerValues,
+  shouldOpenIssuerDialog
 }: {
   initialSetting: GoogleSheetSetting | null;
   initialSpreadsheetTitle?: string | null;
+  initialIssuerSetting: IssuerSetting | null;
+  initialIssuerValues: Pick<
+    SiteConfig,
+    | 'issuerName'
+    | 'issuerPostalCode'
+    | 'issuerAddress'
+    | 'issuerContact'
+    | 'issuerEmail'
+    | 'issuerInvoiceNumber'
+    | 'issuerRepresentativeName'
+    | 'issuerRepresentativeTitle'
+    | 'issuerStampUrl'
+    | 'bankNote'
+  > | null;
+  shouldOpenIssuerDialog?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<'menu' | 'source-sheet' | 'issuer'>('menu');
+  const spreadsheetHref = initialSetting?.spreadsheetId
+    ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(initialSetting.spreadsheetId)}/edit`
+    : null;
+  const spreadsheetLabel = initialSpreadsheetTitle || '現在のスプレッドシートを開く';
 
   useEffect(() => {
     if (!open) {
@@ -47,6 +71,21 @@ export function SourceSheetDialog({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setView('menu');
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!shouldOpenIssuerDialog) {
+      return;
+    }
+
+    setOpen(true);
+    setView('issuer');
+  }, [shouldOpenIssuerDialog]);
 
   return (
     <>
@@ -67,15 +106,21 @@ export function SourceSheetDialog({
             className="dialog-card"
             role="dialog"
             aria-modal="true"
-            aria-label="GOOGLE SHEETS"
+            aria-label="設定メニュー"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="dialog-header">
               <div>
                 <p className="eyebrow" style={{ marginBottom: 6 }}>
-                  GOOGLE SHEETS
+                  SETTINGS
                 </p>
-                <h2 className="dialog-title">Source スプレッドシート</h2>
+                <h2 className="dialog-title">
+                  {view === 'menu'
+                    ? '設定メニュー'
+                    : view === 'source-sheet'
+                      ? 'Source スプレッドシート'
+                      : '発行人情報'}
+                </h2>
               </div>
               <button
                 type="button"
@@ -87,11 +132,71 @@ export function SourceSheetDialog({
               </button>
             </div>
 
-            <ImportPanel
-              initialSetting={initialSetting}
-              initialSpreadsheetTitle={initialSpreadsheetTitle}
-              withinDialog
-            />
+            {view === 'menu' ? (
+              <>
+                <div className="dialog-choice-grid">
+                  <button type="button" className="dialog-choice-button" onClick={() => setView('source-sheet')}>
+                    <span className="dialog-choice-title">Source スプレッドシート</span>
+                    <span className="dialog-choice-copy">連携先のスプレッドシートを設定します。</span>
+                  </button>
+                  <button type="button" className="dialog-choice-button" onClick={() => setView('issuer')}>
+                    <span className="dialog-choice-title">発行人情報</span>
+                    <span className="dialog-choice-copy">発行者シートがないときの入力値を保存します。</span>
+                  </button>
+                </div>
+
+                {spreadsheetHref ? (
+                  <div className="note" style={{ marginTop: 16 }}>
+                    現在のスプレッドシート:
+                    {' '}
+                    <a
+                      href={spreadsheetHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        color: 'var(--accent-strong)',
+                        fontWeight: 700,
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '0.12em'
+                      }}
+                    >
+                      {spreadsheetLabel}
+                    </a>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+
+            {view === 'source-sheet' ? (
+              <>
+                <div className="hero-actions" style={{ marginTop: 16 }}>
+                  <button className="button-link secondary" type="button" onClick={() => setView('menu')}>
+                    戻る
+                  </button>
+                </div>
+                <ImportPanel
+                  initialSetting={initialSetting}
+                  initialSpreadsheetTitle={initialSpreadsheetTitle}
+                  withinDialog
+                  initialMode={null}
+                />
+              </>
+            ) : null}
+
+            {view === 'issuer' ? (
+              <>
+                <div className="hero-actions" style={{ marginTop: 16 }}>
+                  {/* <button className="button-link secondary" type="button" onClick={() => setView('menu')}>
+                    戻る
+                  </button> */}
+                </div>
+                <IssuerSettingsPanel
+                  initialSetting={initialIssuerSetting}
+                  initialValues={initialIssuerValues}
+                  withinDialog
+                />
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

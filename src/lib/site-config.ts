@@ -1,6 +1,7 @@
-import type { SiteConfig } from '../types';
+import { DEFAULT_ISSUER_SETTING_KEY, type SiteConfig } from '../types';
 import { readGoogleSheetValues } from './google-sheets';
 import { getGoogleSheetSetting } from './store/google-sheet-settings';
+import { getIssuerSetting } from './store/issuer-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../types';
 
 const defaultConfig: SiteConfig = {
@@ -26,20 +27,36 @@ const defaultConfig: SiteConfig = {
 };
 
 export async function loadSiteConfig(): Promise<SiteConfig> {
-  let config = defaultConfig;
+  const config = await loadBaseSiteConfig();
 
+  const [issuerSheetOverrides, manualIssuerSetting] = await Promise.all([
+    loadIssuerSheetOverrides(config.issuerSheetName),
+    getIssuerSetting(DEFAULT_ISSUER_SETTING_KEY).catch(() => null)
+  ]);
+  const manualIssuerOverrides = manualIssuerSetting ? toIssuerConfigOverrides(manualIssuerSetting) : null;
+
+  if (!issuerSheetOverrides && !manualIssuerOverrides) {
+    return config;
+  }
+
+  return {
+    ...config,
+    ...getBlankIssuerConfig(),
+    ...(issuerSheetOverrides || {}),
+    ...(manualIssuerOverrides || {})
+  };
+}
+
+export async function loadBaseSiteConfig(): Promise<SiteConfig> {
   try {
     const configModule = await import('../../invoices-site-config.json');
-    config = {
+    return {
       ...defaultConfig,
       ...configModule.default
     };
   } catch {
-    config = defaultConfig;
+    return defaultConfig;
   }
-
-  const issuerOverrides = await loadIssuerOverrides(config.issuerSheetName);
-  return issuerOverrides ? { ...config, ...getBlankIssuerConfig(), ...issuerOverrides } : config;
 }
 
 const ISSUER_FIELD_ALIASES: Record<IssuerConfigKey, string[]> = {
@@ -134,7 +151,45 @@ function getBlankIssuerConfig(): Pick<
   };
 }
 
-async function loadIssuerOverrides(sheetName: string): Promise<Partial<SiteConfig> | null> {
+function toIssuerConfigOverrides(setting: {
+  issuerName: string;
+  issuerPostalCode: string;
+  issuerAddress: string;
+  issuerContact: string;
+  issuerEmail: string;
+  issuerInvoiceNumber: string;
+  issuerRepresentativeName: string;
+  issuerRepresentativeTitle: string;
+  issuerStampUrl: string;
+  bankNote: string;
+}): Pick<
+  SiteConfig,
+  | 'issuerName'
+  | 'issuerPostalCode'
+  | 'issuerAddress'
+  | 'issuerContact'
+  | 'issuerEmail'
+  | 'issuerInvoiceNumber'
+  | 'issuerRepresentativeName'
+  | 'issuerRepresentativeTitle'
+  | 'issuerStampUrl'
+  | 'bankNote'
+> {
+  return {
+    issuerName: String(setting.issuerName || '').trim(),
+    issuerPostalCode: String(setting.issuerPostalCode || '').trim(),
+    issuerAddress: String(setting.issuerAddress || '').trim(),
+    issuerContact: String(setting.issuerContact || '').trim(),
+    issuerEmail: String(setting.issuerEmail || '').trim(),
+    issuerInvoiceNumber: String(setting.issuerInvoiceNumber || '').trim(),
+    issuerRepresentativeName: String(setting.issuerRepresentativeName || '').trim(),
+    issuerRepresentativeTitle: String(setting.issuerRepresentativeTitle || '').trim(),
+    issuerStampUrl: String(setting.issuerStampUrl || '').trim(),
+    bankNote: String(setting.bankNote || '').trim()
+  };
+}
+
+export async function loadIssuerSheetOverrides(sheetName: string): Promise<Partial<SiteConfig> | null> {
   const normalizedSheetName = String(sheetName || '').trim();
   if (!normalizedSheetName) {
     return null;
@@ -162,6 +217,16 @@ function parseIssuerSheetValues(values: string[][]): Partial<SiteConfig> | null 
   const firstDataRowIndex = values.findIndex((row) => row.some((cell) => String(cell || '').trim()));
   if (firstDataRowIndex < 0) {
     return null;
+  }
+
+  if (isIssuerHeaderRow(values[firstDataRowIndex] || [])) {
+    const hasNonEmptyDataRow = values
+      .slice(firstDataRowIndex + 1)
+      .some((row) => row.some((cell) => String(cell || '').trim()));
+
+    if (!hasNonEmptyDataRow) {
+      return null;
+    }
   }
 
   const headerRecord = finalizeIssuerValues(buildIssuerRecordFromHeaderRow(values, firstDataRowIndex));
@@ -213,6 +278,19 @@ function buildIssuerRecordFromKeyValueRows(values: string[][]): ParsedIssuerValu
     }
     return record;
   }, {});
+}
+
+function isIssuerHeaderRow(row: string[]): boolean {
+  const nonEmptyCells = row
+    .map((cell) => String(cell || '').trim())
+    .filter(Boolean);
+
+  if (nonEmptyCells.length === 0) {
+    return false;
+  }
+
+  const matchedCount = nonEmptyCells.filter((cell) => resolveIssuerFieldKey(cell)).length;
+  return matchedCount >= Math.min(2, nonEmptyCells.length);
 }
 
 function finalizeIssuerValues(values: ParsedIssuerValues): Partial<SiteConfig> {

@@ -48,6 +48,18 @@ export interface SyncProjectToGoogleSheetResult {
   rowCount: number;
 }
 
+export interface SyncIssuerToGoogleSheetInput {
+  target: GoogleSheetTarget;
+  issuerSheetName?: string | null;
+  issuerValues?: IssuerSheetSeed | null;
+}
+
+export interface SyncIssuerToGoogleSheetResult {
+  spreadsheetId: string;
+  issuerSheetName: string;
+  rowCount: number;
+}
+
 export interface ReadGoogleSheetResult {
   spreadsheetId: string;
   sheetName: string;
@@ -318,6 +330,30 @@ export async function getGoogleSpreadsheetTitle(target: GoogleSheetTarget): Prom
   });
 
   return String(metadata.properties?.title || '').trim();
+}
+
+export async function syncIssuerToGoogleSheet(
+  input: SyncIssuerToGoogleSheetInput
+): Promise<SyncIssuerToGoogleSheetResult> {
+  const config = getGoogleSheetsConfig(input.target);
+  const accessToken = await fetchGoogleAccessToken(config);
+  const issuerSheetName = String(input.issuerSheetName || '').trim() || '発行者';
+  const issuerValues = normalizeIssuerSheetSeed(input.issuerValues);
+
+  await ensureSheetExists(accessToken, config.spreadsheetId, issuerSheetName, config.clientEmail);
+  await updateSheetValues({
+    accessToken,
+    spreadsheetId: config.spreadsheetId,
+    range: `${toSheetRangePrefix(issuerSheetName)}!A1`,
+    clientEmail: config.clientEmail,
+    values: [Array.from(ISSUER_HEADERS), buildIssuerSheetRow(issuerValues)]
+  });
+
+  return {
+    spreadsheetId: config.spreadsheetId,
+    issuerSheetName,
+    rowCount: 1
+  };
 }
 
 export async function createGoogleSheetTarget(

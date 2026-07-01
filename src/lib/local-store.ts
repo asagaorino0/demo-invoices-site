@@ -1,11 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { GoogleSheetSetting, InvoiceSelection, Project, ProjectSummary, ServiceLine } from '../types';
+import type { GoogleSheetSetting, InvoiceSelection, IssuerSetting, Project, ProjectSummary, ServiceLine } from '../types';
 import { getMonthKey } from './csv/shared';
 import { normalizeCompanyName } from './project-fields';
 
 export interface LocalStoreData {
   googleSheetSettings: GoogleSheetSetting[];
+  issuerSettings: IssuerSetting[];
   projects: Project[];
   serviceLines: ServiceLine[];
   invoiceSelections: InvoiceSelection[];
@@ -21,6 +22,7 @@ export async function readLocalStore(): Promise<LocalStoreData> {
       googleSheetSettings: Array.isArray(parsed.googleSheetSettings)
         ? parsed.googleSheetSettings.map(normalizeGoogleSheetSetting)
         : [],
+      issuerSettings: Array.isArray(parsed.issuerSettings) ? parsed.issuerSettings.map(normalizeIssuerSetting) : [],
       projects: Array.isArray(parsed.projects) ? parsed.projects.map(normalizeProject) : [],
       serviceLines: Array.isArray(parsed.serviceLines) ? parsed.serviceLines : [],
       invoiceSelections: Array.isArray(parsed.invoiceSelections) ? parsed.invoiceSelections : []
@@ -28,6 +30,7 @@ export async function readLocalStore(): Promise<LocalStoreData> {
   } catch {
     return {
       googleSheetSettings: [],
+      issuerSettings: [],
       projects: [],
       serviceLines: [],
       invoiceSelections: []
@@ -73,6 +76,25 @@ function normalizeGoogleSheetSetting(value: unknown): GoogleSheetSetting {
     spreadsheetId: String(entry.spreadsheetId || '').trim(),
     sheetName: String(entry.sheetName || '').trim(),
     historySheetName: entry.historySheetName ? String(entry.historySheetName) : null,
+    createdAt: String(entry.createdAt || ''),
+    updatedAt: String(entry.updatedAt || '')
+  };
+}
+
+function normalizeIssuerSetting(value: unknown): IssuerSetting {
+  const entry = value as Partial<IssuerSetting>;
+  return {
+    settingKey: String(entry.settingKey || '').trim(),
+    issuerName: String(entry.issuerName || '').trim(),
+    issuerPostalCode: String(entry.issuerPostalCode || '').trim(),
+    issuerAddress: String(entry.issuerAddress || '').trim(),
+    issuerContact: String(entry.issuerContact || '').trim(),
+    issuerEmail: String(entry.issuerEmail || '').trim(),
+    issuerInvoiceNumber: String(entry.issuerInvoiceNumber || '').trim(),
+    issuerRepresentativeName: String(entry.issuerRepresentativeName || '').trim(),
+    issuerRepresentativeTitle: String(entry.issuerRepresentativeTitle || '').trim(),
+    issuerStampUrl: String(entry.issuerStampUrl || '').trim(),
+    bankNote: String(entry.bankNote || '').trim(),
     createdAt: String(entry.createdAt || ''),
     updatedAt: String(entry.updatedAt || '')
   };
