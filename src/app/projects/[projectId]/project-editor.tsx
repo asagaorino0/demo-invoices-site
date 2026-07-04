@@ -14,7 +14,6 @@ import { InvoicePreview } from '../../../components/invoice/invoice-preview';
 import type { SiteConfig } from '../../../types';
 import {
   getInvoiceIssueDate,
-  getInvoiceLines,
   getReceiptIssueDate
 } from '../../../lib/invoice/preview';
 import { getMonthKey } from '../../../lib/csv/shared';
@@ -56,6 +55,15 @@ function reorderIdsByPlacement(
   if (targetIndex === -1) return ids;
   const insertIndex = placement === 'before' ? targetIndex : targetIndex + 1;
   next.splice(insertIndex, 0, fromId);
+  return next;
+}
+
+function moveIdToIndex(ids: string[], targetId: string, targetIndex: number): string[] {
+  if (!targetId || !ids.includes(targetId)) return ids;
+
+  const next = ids.filter((id) => id !== targetId);
+  const normalizedIndex = Math.max(0, Math.min(targetIndex, next.length));
+  next.splice(normalizedIndex, 0, targetId);
   return next;
 }
 
@@ -403,6 +411,7 @@ export function ProjectEditor({
   const reorderCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const dragSessionRef = useRef<{ lineId: string; tab: ReorderTab } | null>(null);
   const collectionTogglePendingRef = useRef<string | null>(null);
+  const uncollectedReturnIndexRef = useRef<Record<string, number>>({});
   const [pending, startTransition] = useTransition();
   const [selectionSavePending, setSelectionSavePending] = useState(false);
   const [sheetSyncPending, setSheetSyncPending] = useState(false);
@@ -557,10 +566,6 @@ export function ProjectEditor({
     () => serviceLines.filter((line) => line.collectionStatus === 'collected'),
     [serviceLines]
   );
-  const invoiceLines = useMemo(
-    () => getInvoiceLines(serviceLines, selectedLineIds),
-    [serviceLines, selectedLineIds]
-  );
   const orderedUncollectedLines = useMemo(() => {
     return orderLinesByIds(uncollectedLines, displayOrderIds);
   }, [uncollectedLines, displayOrderIds]);
@@ -594,6 +599,7 @@ export function ProjectEditor({
     const selectedIds = new Set(filteredSelectedLineIds);
     return orderedUncollectedLines.filter((line) => selectedIds.has(line.id));
   }, [filteredSelectedLineIds, orderedUncollectedLines]);
+  const invoiceLines = useMemo(() => selectedUncollectedLines, [selectedUncollectedLines]);
   const selectedCollectedLines = useMemo(() => {
     const selectedIds = new Set(filteredSelectedReceiptLineIds);
     return orderedCollectedLines.filter((line) => selectedIds.has(line.id));
@@ -1365,15 +1371,30 @@ export function ProjectEditor({
     setMessage('');
     setError('');
     const nextStatus = line.collectionStatus === 'collected' ? 'uncollected' : 'collected';
+    const currentUncollectedIndex = orderedUncollectedLines.findIndex((item) => item.id === line.id);
+
+    if (line.collectionStatus === 'uncollected' && currentUncollectedIndex >= 0) {
+      uncollectedReturnIndexRef.current[line.id] = currentUncollectedIndex;
+    }
+
+    const returnIndex = uncollectedReturnIndexRef.current[line.id];
+    const nextOrderedIds =
+      line.collectionStatus === 'collected' && typeof returnIndex === 'number'
+        ? moveIdToIndex(displayOrderIds, line.id, returnIndex)
+        : displayOrderIds;
     try {
       const selectionSaved = await saveSelections({
         selectedIds: selectedLineIds,
-        orderedIds: displayOrderIds,
+        orderedIds: nextOrderedIds,
         silent: true,
         refresh: false
       });
       if (!selectionSaved) {
         return;
+      }
+
+      if (nextOrderedIds !== displayOrderIds) {
+        setDisplayOrderIds(nextOrderedIds);
       }
 
       const response = await fetch(buildProjectLineApiPath(project.id, line.id), {
@@ -1403,6 +1424,7 @@ export function ProjectEditor({
       }
 
       const synced = await syncProjectToSheet({
+        orderedIds: nextOrderedIds,
         successMessage:
           nextStatus === 'collected'
             ? '回収済に更新し、Google Sheets に保存しました。'
@@ -1954,31 +1976,6 @@ export function ProjectEditor({
                       {isSelected ? '✓' : ''}
                     </button>
                     <div style={{ minWidth: 0, display: 'block' }}>
-                      {canDrag ? (
-                        <div
-                          data-drag-handle="true"
-                          onPointerDown={(event) => beginPointerReorder(event, line.id, 'uncollected', canDrag)}
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                          }}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            minHeight: 32,
-                            paddingRight: 12,
-                            marginBottom: 8,
-                            color: 'var(--muted)',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            letterSpacing: '0.04em',
-                            cursor: 'grab',
-                            touchAction: 'none',
-                            userSelect: 'none'
-                          }}
-                        >
-                          DRAG TO REORDER
-                        </div>
-                      ) : null}
                       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
                         {line.serviceName}
                       </div>
@@ -1989,9 +1986,11 @@ export function ProjectEditor({
                         数量: {line.quantity}
                         {line.unit} / {line.taxIncluded ? '内税' : '外税'}
                       </div>
-                      <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                        担当: {line.staffName || '担当未設定'}
-                      </div>
+                      {line.staffName.trim() ? (
+                        <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                          担当: {line.staffName}
+                        </div>
+                      ) : null}
                       {line.memo ? (
                         <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
                           メモ: {line.memo}
@@ -2137,33 +2136,6 @@ export function ProjectEditor({
                     {isSelected ? '✓' : ''}
                   </button>
                   <div style={{ minWidth: 0, display: 'block' }}>
-                    {canDrag ? (
-                      <div
-                        data-drag-handle="true"
-                        onPointerDown={(event) =>
-                          beginPointerReorder(event, line.id, 'collected', canDrag)
-                        }
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                        }}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          minHeight: 32,
-                          paddingRight: 12,
-                          marginBottom: 8,
-                          color: 'var(--muted)',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          letterSpacing: '0.04em',
-                          cursor: 'grab',
-                          touchAction: 'none',
-                          userSelect: 'none'
-                        }}
-                      >
-                        DRAG TO REORDER
-                      </div>
-                    ) : null}
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-strong)' }}>
                       {line.serviceName}
                     </div>
@@ -2174,9 +2146,11 @@ export function ProjectEditor({
                       数量: {line.quantity}
                       {line.unit} / {line.taxIncluded ? '内税' : '外税'}
                     </div>
-                    <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
-                      担当: {line.staffName || '担当未設定'}
-                    </div>
+                    {line.staffName.trim() ? (
+                      <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
+                        担当: {line.staffName}
+                      </div>
+                    ) : null}
                     {line.memo ? (
                       <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 14 }}>
                         メモ: {line.memo}
