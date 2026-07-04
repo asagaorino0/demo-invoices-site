@@ -7,6 +7,7 @@ import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 import { getIssuerSetting } from '../../lib/store/issuer-settings';
 import { SourceSheetDialog } from './source-sheet-dialog';
 import { SourceSheetLiveRefresh } from './source-sheet-live-refresh';
+import { SourceSheetRefreshButton } from './source-sheet-refresh-button';
 import { NewUserDialog } from './new-user-dialog';
 import { UserInfoDialogTrigger } from './user-info-dialog-trigger';
 import { WorkbenchLayoutShell } from './workbench-layout-shell';
@@ -138,6 +139,11 @@ export default async function ProjectsPage({
         <h3 className="page-title-static" style={{ margin: 0, fontSize: 18, lineHeight: 1.4, color: "#5f143b" }}>
           スプシで請求書
         </h3>
+        {hasSourceSpreadsheetSetting ? (
+          <div className="hero-actions" style={{ marginTop: 12 }}>
+            <SourceSheetRefreshButton />
+          </div>
+        ) : null}
         {/* <p>
           利用者ごとの未回収確認、請求対象の選択、明細編集、プレビュー、CSV 書き出しを一つの流れで扱います。
         </p> */}
