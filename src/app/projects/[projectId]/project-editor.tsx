@@ -31,6 +31,10 @@ type ReorderTab = 'uncollected' | 'collected';
 type InvoiceRecipientMode = 'customer' | 'company' | 'facility' | 'custom';
 const DRAFT_LINE_ID_PREFIX = '__draft_line__';
 
+function buildProjectLineApiPath(projectId: string, lineId: string): string {
+  return `/api/projects/${encodeURIComponent(projectId)}/lines/${encodeURIComponent(lineId)}`;
+}
+
 const invoiceDateModeOptions: Array<{
   value: Project['defaultInvoiceDateMode'];
   label: string;
@@ -290,6 +294,7 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
 function buildLineFormValue(line: ServiceLine | null) {
   return line
     ? {
+      id: line.id,
       serviceDate: line.serviceDate || '',
       serviceName: line.serviceName,
       staffName: line.staffName,
@@ -314,6 +319,7 @@ function areLineFormsEqual(
   if (left === right) return true;
   if (!left || !right) return left === right;
   return (
+    left.id === right.id &&
     left.serviceDate === right.serviceDate &&
     left.serviceName === right.serviceName &&
     left.staffName === right.staffName &&
@@ -487,10 +493,22 @@ export function ProjectEditor({
   );
   const [editingLineOverride, setEditingLineOverride] = useState<ServiceLine | null>(null);
   const editingLine = useMemo(
-    () =>
-      serviceLines.find((line) => line.id === editingLineId) ||
-      (editingLineOverride?.id === editingLineId ? editingLineOverride : null) ||
-      (serviceLines.length === 1 ? serviceLines[0] || null : null),
+    () => {
+      const matchedServiceLine = serviceLines.find((line) => line.id === editingLineId) || null;
+      if (matchedServiceLine) {
+        return matchedServiceLine;
+      }
+
+      if (editingLineOverride?.id === editingLineId) {
+        return editingLineOverride;
+      }
+
+      if (!editingLineId && serviceLines.length === 1) {
+        return serviceLines[0] || null;
+      }
+
+      return null;
+    },
     [editingLineId, editingLineOverride, serviceLines]
   );
   const [lineForm, setLineForm] = useState(() =>
@@ -515,7 +533,8 @@ export function ProjectEditor({
   const isLineDirty =
     !!editingLine &&
     !!lineForm &&
-    (lineForm.serviceDate !== (editingLine.serviceDate || '') ||
+    (lineForm.id !== editingLine.id ||
+      lineForm.serviceDate !== (editingLine.serviceDate || '') ||
       lineForm.serviceName !== editingLine.serviceName ||
       lineForm.staffName !== editingLine.staffName ||
       lineForm.price !== String(editingLine.price) ||
@@ -1049,6 +1068,7 @@ export function ProjectEditor({
           onChange={(event) =>
             setForm((current) => ({ ...current, defaultRemarks: event.target.value }))
           }
+          style={{ ...inputStyle, minHeight: 88, resize: 'vertical' }}
         />
       </div>
     );
@@ -1111,7 +1131,7 @@ export function ProjectEditor({
 
     const responses = await Promise.all(
       receiptContextLines.map((line) =>
-        fetch(`/api/projects/${project.id}/lines/${line.id}`, {
+        fetch(buildProjectLineApiPath(project.id, line.id), {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -1189,7 +1209,7 @@ export function ProjectEditor({
   }
 
   async function saveLine(): Promise<boolean> {
-    if (!editingLine || !lineForm) return false;
+    if (!lineForm) return false;
     setMessage('');
     setError('');
 
@@ -1227,9 +1247,17 @@ export function ProjectEditor({
         lineForm.collectionStatus === 'collected' ? lineForm.receiptIssuedAt || null : null
     };
 
-    const isDraftLine = isDraftLineId(editingLine.id);
+    const targetLineId = lineForm.id;
+    if (!targetLineId) {
+      setError('保存対象の明細を特定できませんでした。');
+      return false;
+    }
+
+    const isDraftLine = isDraftLineId(targetLineId);
     const response = await fetch(
-      isDraftLine ? `/api/projects/${project.id}/lines` : `/api/projects/${project.id}/lines/${editingLine.id}`,
+      isDraftLine
+        ? `/api/projects/${encodeURIComponent(project.id)}/lines`
+        : buildProjectLineApiPath(project.id, targetLineId),
       {
         method: isDraftLine ? 'POST' : 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -1246,21 +1274,7 @@ export function ProjectEditor({
     if (data.line?.id) {
       setEditingLineOverride(data.line);
       setEditingLineId(data.line.id);
-      setLineForm({
-        serviceDate: data.line.serviceDate || '',
-        serviceName: data.line.serviceName,
-        staffName: data.line.staffName,
-        price: String(data.line.price),
-        quantity: String(data.line.quantity),
-        unit: data.line.unit,
-        taxIncluded: data.line.taxIncluded,
-        remarks: data.line.remarks,
-        memo: data.line.memo,
-        visible: data.line.visible,
-        collectionStatus: data.line.collectionStatus,
-        collectedAt: data.line.collectedAt || '',
-        receiptIssuedAt: data.line.receiptIssuedAt || ''
-      });
+      setLineForm(buildLineFormValue(data.line));
     }
     const synced = await syncProjectToSheet({
       successMessage: 'プレビューに反映し、Google Sheets に保存しました。',
@@ -1275,16 +1289,17 @@ export function ProjectEditor({
   }
 
   async function duplicateCurrentLine(): Promise<boolean> {
-    if (!editingLine) return false;
+    const targetLineId = lineForm?.id || editingLine?.id || editingLineId;
+    if (!targetLineId) return false;
     setMessage('');
     setError('');
 
-    if (isDraftLineId(editingLine.id)) {
+    if (isDraftLineId(targetLineId)) {
       setError('新規明細は保存してから複製してください。');
       return false;
     }
 
-    const response = await fetch(`/api/projects/${project.id}/lines/${editingLine.id}`, {
+    const response = await fetch(buildProjectLineApiPath(project.id, targetLineId), {
       method: 'POST'
     });
     const data = (await response.json()) as { message?: string };
@@ -1305,14 +1320,15 @@ export function ProjectEditor({
   }
 
   async function deleteCurrentLine() {
-    if (!editingLine) return;
+    const targetLineId = lineForm?.id || editingLine?.id || editingLineId;
+    if (!targetLineId) return;
     setMessage('');
     setError('');
 
     const ok = window.confirm('この明細を削除しますか？');
     if (!ok) return;
 
-    if (isDraftLineId(editingLine.id)) {
+    if (isDraftLineId(targetLineId)) {
       setEditingLineOverride(null);
       setEditingLineId('');
       setLineForm(null);
@@ -1321,7 +1337,7 @@ export function ProjectEditor({
       return;
     }
 
-    const response = await fetch(`/api/projects/${project.id}/lines/${editingLine.id}`, {
+    const response = await fetch(buildProjectLineApiPath(project.id, targetLineId), {
       method: 'DELETE'
     });
     const data = (await response.json()) as { message?: string };
@@ -1360,7 +1376,7 @@ export function ProjectEditor({
         return;
       }
 
-      const response = await fetch(`/api/projects/${project.id}/lines/${line.id}`, {
+      const response = await fetch(buildProjectLineApiPath(project.id, line.id), {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -1680,21 +1696,7 @@ export function ProjectEditor({
     const nextLineId = nextLine.id;
     setEditingLineOverride(nextLine);
     setEditingLineId(nextLineId);
-    setLineForm({
-      serviceDate: nextLine.serviceDate || '',
-      serviceName: nextLine.serviceName,
-      staffName: nextLine.staffName,
-      price: String(nextLine.price),
-      quantity: String(nextLine.quantity),
-      unit: nextLine.unit,
-      taxIncluded: nextLine.taxIncluded,
-      remarks: nextLine.remarks,
-      memo: nextLine.memo,
-      visible: nextLine.visible,
-      collectionStatus: nextLine.collectionStatus,
-      collectedAt: nextLine.collectedAt || '',
-      receiptIssuedAt: nextLine.receiptIssuedAt || ''
-    });
+    setLineForm(buildLineFormValue(nextLine));
     if (options?.openEditor) {
       setLineEditorDialogOpen(true);
     }
@@ -2314,10 +2316,10 @@ export function ProjectEditor({
               </div>
               <label>
                 <div>備考(請求書や領収書に表示されます)</div>
-                <input
+                <textarea
                   value={lineForm.remarks}
                   onChange={(event) => setLineForm((current) => current && ({ ...current, remarks: event.target.value }))}
-                  style={inputStyle}
+                  style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }}
                 />
               </label>
               <label>

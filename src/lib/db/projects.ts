@@ -1083,6 +1083,101 @@ export async function upsertProjectSnapshot(project: Project): Promise<Project> 
   }
 }
 
+export async function upsertProjectDetailSnapshot(input: {
+  project: Project;
+  serviceLines: ServiceLine[];
+  invoiceSelections: InvoiceSelection[];
+}): Promise<ProjectDetailBundle> {
+  const { project, serviceLines, invoiceSelections } = input;
+
+  try {
+    await withTransaction(async (db) => {
+      await db.query(upsertProjectSql, [
+        project.id,
+        project.importId,
+        project.customerId,
+        project.customerName,
+        project.subject,
+        project.defaultInvoiceDateMode,
+        project.invoiceRecipient,
+        project.facilityName,
+        project.companyName,
+        project.issueDate || '',
+        project.defaultRemarks,
+        project.issuerBoxOffsetX,
+        project.issuerBoxOffsetY,
+        project.issuerBoxWidth,
+        project.stampOffsetX,
+        project.stampOffsetY,
+        project.status,
+        project.createdAt,
+        project.updatedAt
+      ]);
+
+      await db.query('delete from invoice_selections where project_id = $1', [project.id]);
+      await db.query('delete from service_lines where project_id = $1', [project.id]);
+
+      for (const line of serviceLines) {
+        await db.query(upsertServiceLineSql, [
+          line.id,
+          line.projectId,
+          line.reservationId,
+          line.serviceDate || '',
+          line.serviceName,
+          line.staffName,
+          line.price,
+          line.quantity,
+          line.unit,
+          line.taxIncluded,
+          JSON.stringify(line.extraCharges || []),
+          line.remarks,
+          line.memo,
+          line.visible,
+          line.collectionStatus,
+          line.collectedAt || '',
+          line.receiptIssuedAt || '',
+          line.invoiceCode,
+          line.sortKey,
+          line.createdAt,
+          line.updatedAt
+        ]);
+      }
+
+      for (const selection of invoiceSelections) {
+        await db.query(upsertInvoiceSelectionSql, [
+          selection.projectId,
+          selection.lineId,
+          selection.selectedForInvoice,
+          selection.selectionBatchKey,
+          selection.updatedAt
+        ]);
+      }
+    });
+  } catch (error) {
+    if (!shouldUseLocalStore(error)) throw error;
+    const store = await readLocalStore();
+
+    await writeLocalStore({
+      ...store,
+      projects: upsertById(store.projects, project),
+      serviceLines: [
+        ...store.serviceLines.filter((line) => line.projectId !== project.id),
+        ...serviceLines
+      ],
+      invoiceSelections: [
+        ...store.invoiceSelections.filter((selection) => selection.projectId !== project.id),
+        ...invoiceSelections
+      ]
+    });
+  }
+
+  return {
+    project,
+    serviceLines,
+    invoiceSelections
+  };
+}
+
 function shouldUseLocalStore(error: unknown): boolean {
   const message = String(error || '');
   return (

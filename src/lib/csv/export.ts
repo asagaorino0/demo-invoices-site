@@ -66,7 +66,7 @@ export function exportInvoiceCsvRows(input: InvoiceExportInput): InvoiceCsvRow[]
         isCollected: stringifyBoolean(line.collectionStatus === 'collected'),
         isCollectedDate: line.collectedAt || '',
         receiptIssueDate: line.receiptIssuedAt || '',
-        remarks: line.remarks || project.defaultRemarks || '',
+        remarks: line.remarks ?? project.defaultRemarks ?? '',
         memo: line.memo,
         visible: stringifyBoolean(line.visible)
       };
