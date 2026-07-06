@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 
 type SourceSheetMode = 'existing' | 'create';
 const ISSUER_QUERY_KEYS = [
+  'shopId',
   'issuerName',
   'issuerPostalCode',
   'issuerAddress',
@@ -55,6 +56,7 @@ export default async function SourceSheetPage({
   searchParams?: Promise<{
     mode?: string;
     returnTo?: string;
+    shopId?: string;
     issuerName?: string;
     issuerPostalCode?: string;
     issuerAddress?: string;
