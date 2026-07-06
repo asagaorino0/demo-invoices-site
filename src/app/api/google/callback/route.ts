@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
     }
 
     const payload = JSON.parse(payloadCookie) as {
+      settingKey?: string;
       spreadsheetTitle?: string;
       destinationFolderUrlOrId?: string;
       newFolderName?: string;
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
       issuerValues?: IssuerSheetSeed;
     };
     const returnPath = normalizeReturnPath(String(payload.returnPath || '').trim());
+    const settingKey = String(payload.settingKey || '').trim() || DEFAULT_GOOGLE_SHEET_SETTING_KEY;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || '';
     const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
 
@@ -119,7 +121,7 @@ export async function GET(request: NextRequest) {
     await clearWorkspaceProjectData();
 
     await upsertGoogleSheetSetting({
-      settingKey: DEFAULT_GOOGLE_SHEET_SETTING_KEY,
+      settingKey,
       spreadsheetId: created.spreadsheetId,
       sheetName: created.sheetName,
       historySheetName: created.historySheetName,

@@ -5,6 +5,7 @@ import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../types';
 import type { KonoyubiIssuerSeed } from '../../lib/konoyubi/build-source-sheet-auth-url';
 import { getGoogleSpreadsheetTitle } from '../../lib/google-sheets';
 import { resolveTenantIdFromGoogleSheetTarget } from '../../lib/tenant';
+import { buildGoogleSheetSettingKey } from '../../lib/google-sheet-setting-key';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +73,8 @@ export default async function SourceSheetPage({
   }>;
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const initialSetting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
+  const settingKey = buildGoogleSheetSettingKey(resolvedSearchParams?.shopId);
+  const initialSetting = await getGoogleSheetSetting(settingKey || DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
   const hydratedInitialSetting = initialSetting?.tenantId
     ? initialSetting
     : initialSetting
@@ -129,6 +131,7 @@ export default async function SourceSheetPage({
 
         <ImportPanel
           initialSetting={hydratedInitialSetting}
+          settingKey={settingKey}
           initialSpreadsheetTitle={initialSpreadsheetTitle}
           withinDialog
           initialMode={initialMode}

@@ -59,6 +59,7 @@ function normalizeReturnPath(input: string): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const settingKey = String(request.nextUrl.searchParams.get('settingKey') || '').trim();
     const spreadsheetTitle = String(request.nextUrl.searchParams.get('spreadsheetTitle') || '').trim();
     const destinationFolderUrlOrId = String(request.nextUrl.searchParams.get('destinationFolderUrlOrId') || '').trim();
     const newFolderName = String(request.nextUrl.searchParams.get('newFolderName') || '').trim();
@@ -89,6 +90,7 @@ export async function GET(request: NextRequest) {
       redirectUri,
       origin: request.nextUrl.origin,
       spreadsheetTitle,
+      settingKey,
       destinationFolderUrlOrId,
       newFolderName,
       sheetName,
@@ -108,6 +110,7 @@ export async function GET(request: NextRequest) {
       OAUTH_PAYLOAD_COOKIE,
       JSON.stringify({
         spreadsheetTitle,
+        settingKey,
         destinationFolderUrlOrId,
         newFolderName,
         sheetName,

@@ -26,6 +26,7 @@ interface ExistingSettingPayload {
 
 export function ImportPanel({
   initialSetting,
+  settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY,
   initialSpreadsheetTitle,
   withinDialog = false,
   initialMode,
@@ -33,6 +34,7 @@ export function ImportPanel({
   issuerValues
 }: {
   initialSetting: GoogleSheetSetting | null;
+  settingKey?: string;
   initialSpreadsheetTitle?: string | null;
   withinDialog?: boolean;
   initialMode?: SourceSheetMode | null;
@@ -67,7 +69,6 @@ export function ImportPanel({
   );
   const hasSourceSpreadsheet = Boolean(setting);
   const hasSpreadsheetTitle = form.spreadsheetTitle.trim().length > 0;
-  const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
   const spreadsheetHref = setting?.spreadsheetId
     ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(setting.spreadsheetId)}/edit`
     : null;
@@ -181,6 +182,7 @@ export function ImportPanel({
     }
 
     const params = new URLSearchParams({
+      settingKey,
       spreadsheetTitle: form.spreadsheetTitle,
       destinationFolderUrlOrId: form.destinationFolderUrlOrId,
       newFolderName: form.newFolderName,
