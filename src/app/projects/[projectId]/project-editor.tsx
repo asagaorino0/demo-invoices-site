@@ -1459,12 +1459,6 @@ export function ProjectEditor({
     }
   }
 
-  function downloadProjectCsv() {
-    window.location.href = `/api/projects/${project.id}/export`;
-    setMessage('CSV 書き出しを開始しました。');
-    setError('');
-  }
-
   async function syncProjectToSheet(options?: {
     selectedIds?: string[];
     orderedIds?: string[];
@@ -2787,7 +2781,7 @@ export function ProjectEditor({
             className="note"
             style={{ marginTop: 18, background: '#fff8fb', color: '#7b5b6d' }}
           >
-            <code>スプレッドシートへ保存</code> は利用者情報と明細編集の変更を Google スプレッドシートへ反映します。<code>CSVを書き出す</code> は現在の内容から CSV を出力します。
+            <code>スプレッドシートへ保存</code> は利用者情報と明細編集の変更を Google スプレッドシートへ反映します。
           </div>
           <div className="hero-actions" style={{ marginTop: 18 }}>
             <button
@@ -2797,9 +2791,6 @@ export function ProjectEditor({
               disabled={sheetSyncPending || !canSyncToSheet}
             >
               {sheetSyncPending ? 'スプレッドシートへ保存中...' : 'スプレッドシートへ変更を保存'}
-            </button>
-            <button className="button-link secondary" type="button" onClick={downloadProjectCsv}>
-              CSVを書き出す
             </button>
           </div>
         </article>

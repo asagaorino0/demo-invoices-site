@@ -158,14 +158,6 @@ export default async function ProjectsPage({
             <SourceSheetRefreshButton />
           </div>
         ) : null}
-        {/* <p>
-          利用者ごとの未回収確認、請求対象の選択、明細編集、プレビュー、CSV 書き出しを一つの流れで扱います。
-        </p> */}
-        {/* <div className="hero-actions">
-          <a className="button-link secondary" href="/invoices.html">
-            見本画面を開く
-          </a>
-        </div> */}
       </section>
 
       {loadError ? (
