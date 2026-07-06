@@ -232,8 +232,8 @@ export function ImportPanel({
 
       {setting && !setting.tenantId ? (
         <div className="note" style={{ marginTop: 12, background: '#fff0e4', color: '#8a4216' }}>
-          発行者シートの `shopId` が未設定、またはまだ再保存されていません。tenant 分離を有効にするには `発行者` シートへ
-          `shopId` 列を追加してください。
+          発行者シートの `shopId` が未設定、またはまだ再保存されていません。tenant 分離を有効にするには `発行者` シートの
+          1 行目に `shopId` 列、2 行目以降の同じ列に実際の shopId 値を入れてから、もう一度保存してください。
         </div>
       ) : null}
 
