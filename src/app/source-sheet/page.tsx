@@ -4,6 +4,7 @@ import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../types';
 import type { KonoyubiIssuerSeed } from '../../lib/konoyubi/build-source-sheet-auth-url';
 import { getGoogleSpreadsheetTitle } from '../../lib/google-sheets';
+import { resolveTenantIdFromGoogleSheetTarget } from '../../lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,11 +71,24 @@ export default async function SourceSheetPage({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const initialSetting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
-  const initialSpreadsheetTitle = initialSetting
+  const hydratedInitialSetting = initialSetting?.tenantId
+    ? initialSetting
+    : initialSetting
+      ? {
+        ...initialSetting,
+        tenantId:
+          (await resolveTenantIdFromGoogleSheetTarget({
+            spreadsheetId: initialSetting.spreadsheetId,
+            sheetName: initialSetting.sheetName,
+            historySheetName: initialSetting.historySheetName
+          }).catch(() => null)) || null
+      }
+      : null;
+  const initialSpreadsheetTitle = hydratedInitialSetting
     ? await getGoogleSpreadsheetTitle({
-      spreadsheetId: initialSetting.spreadsheetId,
-      sheetName: initialSetting.sheetName,
-      historySheetName: initialSetting.historySheetName
+      spreadsheetId: hydratedInitialSetting.spreadsheetId,
+      sheetName: hydratedInitialSetting.sheetName,
+      historySheetName: hydratedInitialSetting.historySheetName
     }).catch(() => '')
     : '';
   const initialMode = normalizeMode(resolvedSearchParams?.mode);
@@ -112,7 +126,7 @@ export default async function SourceSheetPage({
         </div>
 
         <ImportPanel
-          initialSetting={initialSetting}
+          initialSetting={hydratedInitialSetting}
           initialSpreadsheetTitle={initialSpreadsheetTitle}
           withinDialog
           initialMode={initialMode}

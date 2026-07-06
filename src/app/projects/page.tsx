@@ -14,6 +14,7 @@ import { WorkbenchLayoutShell } from './workbench-layout-shell';
 import { getGoogleSpreadsheetTitle } from '../../lib/google-sheets';
 import { readSourceSheetViewData } from '../../lib/source-sheet-view';
 import { DEFAULT_ISSUER_SETTING_KEY } from '../../types';
+import { resolveTenantIdFromGoogleSheetTarget } from '../../lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,9 +30,22 @@ export default async function ProjectsPage({
     Awaited<ReturnType<typeof getProjectDetail>>
   >();
   const selectedGoogleSheetSetting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
+  const hydratedGoogleSheetSetting = selectedGoogleSheetSetting?.tenantId
+    ? selectedGoogleSheetSetting
+    : selectedGoogleSheetSetting
+      ? {
+        ...selectedGoogleSheetSetting,
+        tenantId:
+          (await resolveTenantIdFromGoogleSheetTarget({
+            spreadsheetId: selectedGoogleSheetSetting.spreadsheetId,
+            sheetName: selectedGoogleSheetSetting.sheetName,
+            historySheetName: selectedGoogleSheetSetting.historySheetName
+          }).catch(() => null)) || null
+      }
+      : null;
 
   try {
-    if (selectedGoogleSheetSetting) {
+    if (hydratedGoogleSheetSetting) {
       const sourceView = await readSourceSheetViewData();
       projects = sourceView.summaries;
       sourceDetailsByProjectId = sourceView.detailsByProjectId;
@@ -55,22 +69,22 @@ export default async function ProjectsPage({
       invoiceSelections: []
     }))
     : null;
-  const selectedGoogleSpreadsheetTitle = selectedGoogleSheetSetting
+  const selectedGoogleSpreadsheetTitle = hydratedGoogleSheetSetting
     ? await getGoogleSpreadsheetTitle({
-      spreadsheetId: selectedGoogleSheetSetting.spreadsheetId,
-      sheetName: selectedGoogleSheetSetting.sheetName,
-      historySheetName: selectedGoogleSheetSetting.historySheetName
+      spreadsheetId: hydratedGoogleSheetSetting.spreadsheetId,
+      sheetName: hydratedGoogleSheetSetting.sheetName,
+      historySheetName: hydratedGoogleSheetSetting.historySheetName
     }).catch(() => '')
     : '';
   const initialIssuerSetting = await getIssuerSetting(DEFAULT_ISSUER_SETTING_KEY).catch(() => null);
   const baseSiteConfig = await loadBaseSiteConfig().catch(() => null);
-  const issuerSheetValues = selectedGoogleSheetSetting && baseSiteConfig
+  const issuerSheetValues = hydratedGoogleSheetSetting && baseSiteConfig
     ? await loadIssuerSheetOverrides(baseSiteConfig.issuerSheetName).catch(() => null)
     : null;
   const initialIssuerValues = issuerSheetValues ? normalizeIssuerValues(issuerSheetValues) : null;
-  const dialogIssuerSetting = selectedGoogleSheetSetting ? null : initialIssuerSetting;
-  const shouldOpenIssuerDialog = Boolean(selectedGoogleSheetSetting) && !hasIssuerValues(issuerSheetValues);
-  const hasSourceSpreadsheetSetting = Boolean(selectedGoogleSheetSetting);
+  const dialogIssuerSetting = hydratedGoogleSheetSetting ? null : initialIssuerSetting;
+  const shouldOpenIssuerDialog = Boolean(hydratedGoogleSheetSetting) && !hasIssuerValues(issuerSheetValues);
+  const hasSourceSpreadsheetSetting = Boolean(hydratedGoogleSheetSetting);
   const visibleProjects = hasSourceSpreadsheetSetting ? projects : [];
   const customerGroups = buildCustomerGroups(visibleProjects);
   const requestedProjectId = resolvedSearchParams?.projectId || '';
@@ -119,7 +133,7 @@ export default async function ProjectsPage({
 
   return (
     <main className="page-shell">
-      <SourceSheetLiveRefresh enabled={Boolean(selectedGoogleSheetSetting)} />
+      <SourceSheetLiveRefresh enabled={Boolean(hydratedGoogleSheetSetting)} />
       <section
         // className="hero"
         style={{
@@ -128,7 +142,7 @@ export default async function ProjectsPage({
         }}
       >
         <SourceSheetDialog
-          initialSetting={selectedGoogleSheetSetting}
+          initialSetting={hydratedGoogleSheetSetting}
           initialSpreadsheetTitle={selectedGoogleSpreadsheetTitle}
           initialIssuerSetting={dialogIssuerSetting}
           initialIssuerValues={initialIssuerValues}
