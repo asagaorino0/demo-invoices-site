@@ -59,7 +59,6 @@ export function ImportPanel({
   const [form, setForm] = useState({
     spreadsheetTitle: '',
     spreadsheetUrlOrId: initialSetting?.spreadsheetId || '',
-    destinationFolderUrlOrId: '',
     newFolderName: '',
     sheetName: initialSetting?.sheetName || 'invoices',
     historySheetName: initialSetting?.historySheetName || 'history'
@@ -176,15 +175,9 @@ export function ImportPanel({
       return;
     }
 
-    if (form.destinationFolderUrlOrId.trim() && form.newFolderName.trim()) {
-      setSettingError('保存先フォルダは「既存フォルダ URL」か「新規フォルダ名」のどちらか一方だけ入力してください。');
-      return;
-    }
-
     const params = new URLSearchParams({
       settingKey,
       spreadsheetTitle: form.spreadsheetTitle,
-      destinationFolderUrlOrId: form.destinationFolderUrlOrId,
       newFolderName: form.newFolderName,
       sheetName: form.sheetName,
       historySheetName: form.historySheetName
@@ -275,20 +268,7 @@ export function ImportPanel({
                   style={inputStyle}
                 />
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ display: 'block', fontSize: 12, color: '#666' }}>保存先の既存フォルダ URL</label>
-                  <input
-                    placeholder="https://drive.google.com/drive/folders/..."
-                    value={form.destinationFolderUrlOrId}
-                    onChange={(e) => setForm((current) => ({ ...current, destinationFolderUrlOrId: e.target.value }))}
-                    disabled={savePending}
-                    style={inputStyle}
-                  />
-                  <p className="source-meta" style={{ margin: 0 }}>
-                    既存フォルダに入れたい場合は、そのフォルダの URL を貼り付けてください。
-                  </p>
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ display: 'block', fontSize: 12, color: '#666' }}>または新規フォルダ名</label>
+                  <label style={{ display: 'block', fontSize: 12, color: '#666' }}>保存先の新規フォルダ名</label>
                   <input
                     placeholder="例: 2026年請求書"
                     value={form.newFolderName}
@@ -297,7 +277,7 @@ export function ImportPanel({
                     style={inputStyle}
                   />
                   <p className="source-meta" style={{ margin: 0 }}>
-                    新しいフォルダを作って保存したいときだけ入力してください。両方入力した場合は使えません。
+                    公開版では `drive.file` 権限に寄せるため、既存フォルダの指定はせず、このアプリが新規作成したフォルダだけを保存先にできます。未入力ならマイドライブ直下へ作成します。
                   </p>
                 </div>
               </>
@@ -366,7 +346,7 @@ export function ImportPanel({
       ) : null}
 
       <div className="source-meta" style={{ marginTop: 8 }}>
-        新規作成では Google 認証画面へ移動し、あなたの Drive に source / history / 発行者 シートを作成したあとサービスアカウントへ編集権限を付与します。
+        新規作成では Google 認証画面へ移動し、あなたの Drive に source / history / 発行者 シートを作成したあとサービスアカウントへ編集権限を付与します。公開審査を通しやすくするため、保存先フォルダはこのアプリが新規作成するものだけに限定しています。
       </div>
       {!setting ? (
         <div className="source-meta" style={{ marginTop: 12 }}>

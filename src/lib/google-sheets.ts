@@ -474,7 +474,6 @@ export async function exchangeGoogleOAuthCode(input: {
 export async function createGoogleSheetTargetWithUserAccessToken(input: {
   accessToken: string;
   title: string;
-  destinationFolderId?: string | null;
   newFolderName?: string | null;
   sheetName: string;
   historySheetName?: string | null;
@@ -487,7 +486,6 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
   const issuerValues = normalizeIssuerSheetSeed(input.issuerValues);
   const issuerRow = buildIssuerSheetRow(issuerValues);
   const title = String(input.title || '').trim();
-  const destinationFolderId = String(input.destinationFolderId || '').trim();
   const newFolderName = String(input.newFolderName || '').trim();
 
   if (!title) {
@@ -496,10 +494,6 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
   if (!sheetName) {
     throw new Error('シート名を入力してください。');
   }
-  if (destinationFolderId && newFolderName) {
-    throw new Error('保存先フォルダは既存フォルダか新規フォルダのどちらか一方だけ指定してください。');
-  }
-
   console.log('[google-sheets] createGoogleSheetTargetWithUserAccessToken', {
     title,
     sheetName,
@@ -509,17 +503,12 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
     issuerRow
   });
 
-  const parentFolderId = destinationFolderId
-    ? await ensureDriveFolderAccessible({
+  const parentFolderId = newFolderName
+    ? await createDriveFolder({
         accessToken: input.accessToken,
-        folderId: destinationFolderId
+        folderName: newFolderName
       })
-    : newFolderName
-      ? await createDriveFolder({
-          accessToken: input.accessToken,
-          folderName: newFolderName
-        })
-      : '';
+    : '';
 
   const created = await createSpreadsheet({
     accessToken: input.accessToken,

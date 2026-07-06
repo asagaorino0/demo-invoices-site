@@ -61,7 +61,6 @@ export async function GET(request: NextRequest) {
   try {
     const settingKey = String(request.nextUrl.searchParams.get('settingKey') || '').trim();
     const spreadsheetTitle = String(request.nextUrl.searchParams.get('spreadsheetTitle') || '').trim();
-    const destinationFolderUrlOrId = String(request.nextUrl.searchParams.get('destinationFolderUrlOrId') || '').trim();
     const newFolderName = String(request.nextUrl.searchParams.get('newFolderName') || '').trim();
     const sheetName = String(request.nextUrl.searchParams.get('sheetName') || '').trim();
     const historySheetName = String(request.nextUrl.searchParams.get('historySheetName') || '').trim() || 'history';
@@ -76,8 +75,12 @@ export async function GET(request: NextRequest) {
       return redirectToProjects(request, 'error', 'シート名を入力してください。');
     }
 
-    if (destinationFolderUrlOrId && newFolderName) {
-      return redirectToProjects(request, 'error', '保存先フォルダは既存 URL か新規フォルダ名のどちらか一方だけ指定してください。');
+    if (String(request.nextUrl.searchParams.get('destinationFolderUrlOrId') || '').trim()) {
+      return redirectToProjects(
+        request,
+        'error',
+        '公開版では既存の Drive フォルダ指定は使えません。保存先を分けたい場合は新規フォルダ名を入力してください。'
+      );
     }
 
     const clientId = must(process.env.GOOGLE_CLIENT_ID, 'GOOGLE_CLIENT_ID');
@@ -91,7 +94,6 @@ export async function GET(request: NextRequest) {
       origin: request.nextUrl.origin,
       spreadsheetTitle,
       settingKey,
-      destinationFolderUrlOrId,
       newFolderName,
       sheetName,
       historySheetName,
@@ -111,7 +113,6 @@ export async function GET(request: NextRequest) {
       JSON.stringify({
         spreadsheetTitle,
         settingKey,
-        destinationFolderUrlOrId,
         newFolderName,
         sheetName,
         historySheetName,
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
     authUrl.searchParams.set('include_granted_scopes', 'true');
     authUrl.searchParams.set(
       'scope',
-      ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive'].join(' ')
+      ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.file'].join(' ')
     );
     authUrl.searchParams.set('state', state);
 
