@@ -1,4 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { GoogleSheetSetting, InvoiceSelection, IssuerSetting, Project, ProjectSummary, ServiceLine } from '../types';
 import { getMonthKey } from './csv/shared';
@@ -13,11 +15,12 @@ export interface LocalStoreData {
   invoiceSelections: InvoiceSelection[];
 }
 
-const STORE_FILE = path.join(process.cwd(), '.demo-invoices-local-store.json');
+const STORE_FILE_NAME = '.demo-invoices-local-store.json';
+let storeFilePathPromise: Promise<string> | null = null;
 
 export async function readLocalStore(): Promise<LocalStoreData> {
   try {
-    const raw = await readFile(STORE_FILE, 'utf8');
+    const raw = await readFile(await getStoreFilePath(), 'utf8');
     const parsed = JSON.parse(raw) as Partial<LocalStoreData> & {
       workspaces?: Record<string, Partial<LocalStoreData>>;
     };
@@ -50,10 +53,11 @@ export async function readLocalStore(): Promise<LocalStoreData> {
 
 export async function writeLocalStore(data: LocalStoreData): Promise<void> {
   const workspaceKey = await getCurrentWorkspaceKey();
+  const storeFilePath = await getStoreFilePath();
   let parsed: { workspaces?: Record<string, LocalStoreData> } = {};
 
   try {
-    parsed = JSON.parse(await readFile(STORE_FILE, 'utf8')) as { workspaces?: Record<string, LocalStoreData> };
+    parsed = JSON.parse(await readFile(storeFilePath, 'utf8')) as { workspaces?: Record<string, LocalStoreData> };
   } catch {
     parsed = {};
   }
@@ -65,7 +69,47 @@ export async function writeLocalStore(data: LocalStoreData): Promise<void> {
     }
   };
 
-  await writeFile(STORE_FILE, JSON.stringify(nextPayload, null, 2), 'utf8');
+  await writeFile(storeFilePath, JSON.stringify(nextPayload, null, 2), 'utf8');
+}
+
+async function getStoreFilePath(): Promise<string> {
+  if (!storeFilePathPromise) {
+    storeFilePathPromise = resolveStoreFilePath().catch((error) => {
+      storeFilePathPromise = null;
+      throw error;
+    });
+  }
+
+  return storeFilePathPromise;
+}
+
+async function resolveStoreFilePath(): Promise<string> {
+  const envPath = String(process.env.DEMO_INVOICES_LOCAL_STORE_FILE || '').trim();
+  if (envPath) {
+    return envPath;
+  }
+
+  const candidates = [
+    path.join(process.cwd(), STORE_FILE_NAME),
+    path.join(os.tmpdir(), STORE_FILE_NAME)
+  ];
+
+  for (const candidate of candidates) {
+    if (await canWriteStoreFile(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[candidates.length - 1];
+}
+
+async function canWriteStoreFile(filePath: string): Promise<boolean> {
+  try {
+    await access(path.dirname(filePath), fsConstants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function buildProjectSummaries(data: LocalStoreData): ProjectSummary[] {
