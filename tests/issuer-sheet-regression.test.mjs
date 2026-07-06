@@ -45,7 +45,10 @@ test('loadSiteConfig overlays issuer values from the shared spreadsheet setting'
   assert.match(configFile, /'shopbankname'/u);
   assert.match(configFile, /'shopbanknumber'/u);
   assert.match(configFile, /getBlankIssuerConfig\(\)/u);
-  assert.match(configFile, /\{ \.\.\.config, \.\.\.getBlankIssuerConfig\(\), \.\.\.issuerOverrides \}/u);
+  assert.match(configFile, /issuerSheetOverrides/u);
+  assert.match(configFile, /manualIssuerOverrides/u);
+  assert.match(configFile, /\.\.\.\(issuerSheetOverrides \|\| \{\}\)/u);
+  assert.match(configFile, /\.\.\.\(manualIssuerOverrides \|\| \{\}\)/u);
   assert.match(configFile, /buildBankNote\(values\.bankName, values\.bankNumber\)/u);
 });
 

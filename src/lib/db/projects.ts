@@ -28,7 +28,8 @@ import {
   upsertProjectSql,
   upsertServiceLineSql
 } from './sql';
-import { getCurrentWorkspaceKey, scopeEntityId } from '../workspace';
+import { getCurrentTenantScopeKey } from '../tenant';
+import { scopeEntityId } from '../workspace';
 
 export interface ProjectDetailBundle {
   project: Project | null;
@@ -144,7 +145,7 @@ export interface DuplicateServiceLineInput {
 }
 
 export async function listProjectSummaries(): Promise<ProjectSummary[]> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   try {
     const db = await getDb();
     const result = await db.query<ProjectSummary>(projectSummarySql, [workspaceKey]);
@@ -157,7 +158,7 @@ export async function listProjectSummaries(): Promise<ProjectSummary[]> {
 }
 
 export async function getProjectDetail(projectId: string): Promise<ProjectDetailBundle> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   try {
     const db = await getDb();
     const [projectResult, serviceLineResult, selectionResult] = await Promise.all([
@@ -187,7 +188,7 @@ export async function getProjectDetail(projectId: string): Promise<ProjectDetail
 }
 
 export async function persistImportedBundle(input: PersistImportInput): Promise<PersistImportResult> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const importedCustomerIds = Array.from(new Set(input.projects.map((project) => project.customerId))).filter(
     Boolean
   );
@@ -418,7 +419,7 @@ async function deleteProjectsByCompanyNames(
 }
 
 export async function updateProjectHeader(input: UpdateProjectHeaderInput): Promise<Project | null> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const now = new Date().toISOString();
 
   try {
@@ -485,7 +486,7 @@ export async function replaceProjectSelections(
   selectedLineIds: string[],
   orderedLineIds?: string[]
 ): Promise<{ projectId: string; selectedCount: number }> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const now = Date.now();
 
   try {
@@ -550,7 +551,7 @@ export async function replaceProjectSelections(
 }
 
 export async function updateServiceLine(input: UpdateServiceLineInput): Promise<ServiceLine | null> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const now = new Date().toISOString();
   const collectedAt =
     input.collectionStatus === 'collected'
@@ -646,7 +647,7 @@ export async function createExportJob(input: {
   exportedRowCount: number;
   exportType?: 'csv_project' | 'csv_all_projects';
 }): Promise<void> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   try {
     const db = await getDb();
     await db.query(insertExportJobSql, [
@@ -677,7 +678,7 @@ export async function createExportJob(input: {
 }
 
 export async function markProjectAsExported(projectId: string): Promise<void> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const now = new Date().toISOString();
 
   try {
@@ -701,7 +702,7 @@ export async function markProjectAsExported(projectId: string): Promise<void> {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const now = new Date().toISOString();
   const id = scopeEntityId(workspaceKey, crypto.randomUUID());
 
@@ -894,7 +895,7 @@ function padCode(value: number, length: number): string {
 }
 
 export async function createServiceLine(input: CreateServiceLineInput): Promise<ServiceLine> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const now = new Date().toISOString();
   const reservationId = input.reservationId || `manual-${now.replace(/\D/g, '').slice(0, 14)}`;
   const project = await getProjectDetail(input.projectId);
@@ -983,7 +984,7 @@ export async function loadServiceLineIdentitiesForCustomers(
 ): Promise<Array<{ customerId: string; lineId: string; reservationId: string }>> {
   if (customerIds.length === 0) return [];
 
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   try {
     const db = await getDb();
     const result = await db.query<{ customerId: string; lineId: string; reservationId: string }>(
@@ -1045,7 +1046,7 @@ export async function duplicateServiceLine(input: DuplicateServiceLineInput): Pr
 }
 
 export async function deleteServiceLine(projectId: string, lineId: string): Promise<void> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const now = new Date().toISOString();
 
   try {
@@ -1069,7 +1070,7 @@ export async function deleteServiceLine(projectId: string, lineId: string): Prom
 }
 
 export async function clearWorkspaceProjectData(): Promise<void> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   try {
     await withTransaction(async (db) => {
       await db.query('delete from invoice_selections where workspace_key = $1', [workspaceKey]);
@@ -1090,7 +1091,7 @@ export async function clearWorkspaceProjectData(): Promise<void> {
 }
 
 export async function upsertProjectSnapshot(project: Project): Promise<Project> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   try {
     const db = await getDb();
     await db.query(upsertProjectSql, [
@@ -1133,7 +1134,7 @@ export async function upsertProjectDetailSnapshot(input: {
   serviceLines: ServiceLine[];
   invoiceSelections: InvoiceSelection[];
 }): Promise<ProjectDetailBundle> {
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   const { project, serviceLines, invoiceSelections } = input;
 
   try {
@@ -1248,7 +1249,7 @@ function shouldUseLocalStore(error: unknown): boolean {
 export async function loadSelectionsForCustomers(customerIds: string[]): Promise<InvoiceSelection[]> {
   if (customerIds.length === 0) return [];
 
-  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspaceKey = await getCurrentTenantScopeKey();
   try {
     const db = await getDb();
     const result = await db.query<InvoiceSelection>(

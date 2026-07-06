@@ -1,6 +1,8 @@
 import { getGoogleSheetsErrorStatus, verifyGoogleSheetTarget } from '../../../lib/google-sheets';
 import { getGoogleSheetSetting, upsertGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../types';
+import { loadBaseSiteConfig } from '../../../lib/site-config';
+import { resolveTenantIdFromGoogleSheetTarget } from '../../../lib/tenant';
 
 export async function GET(request: Request): Promise<Response> {
   try {
@@ -53,11 +55,21 @@ export async function POST(request: Request): Promise<Response> {
       sheetName,
       historySheetName
     });
+    const baseSiteConfig = await loadBaseSiteConfig().catch(() => null);
+    const tenantId = await resolveTenantIdFromGoogleSheetTarget(
+      {
+        spreadsheetId,
+        sheetName,
+        historySheetName
+      },
+      baseSiteConfig?.issuerSheetName
+    );
     const setting = await upsertGoogleSheetSetting({
       settingKey,
       spreadsheetId,
       sheetName,
-      historySheetName
+      historySheetName,
+      tenantId
     });
 
     return Response.json({

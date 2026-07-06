@@ -1,4 +1,5 @@
 export interface KonoyubiIssuerSeed {
+  shopId?: string;
   issuerName?: string;
   issuerPostalCode?: string;
   issuerAddress?: string;
@@ -40,6 +41,7 @@ export function buildSourceSheetAuthUrl(input: BuildSourceSheetAuthUrlInput): st
   url.searchParams.set('returnPath', String(input.returnPath || '/source-sheet').trim() || '/source-sheet');
 
   const issuer = input.issuer || {};
+  appendIfPresent(url, 'shopId', issuer.shopId);
   appendIfPresent(url, 'issuerName', issuer.issuerName);
   appendIfPresent(url, 'issuerPostalCode', issuer.issuerPostalCode);
   appendIfPresent(url, 'issuerAddress', issuer.issuerAddress);

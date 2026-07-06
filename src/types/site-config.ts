@@ -16,6 +16,7 @@ export interface SiteConfig {
   issuerRepresentativeTitle: string;
   issuerStampUrl: string;
   bankNote: string;
+  shopId: string;
   defaultTaxRate: number;
   currency: string;
 }

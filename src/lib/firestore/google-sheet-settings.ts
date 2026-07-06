@@ -6,6 +6,7 @@ export interface UpsertGoogleSheetSettingInput {
   spreadsheetId: string;
   sheetName: string;
   historySheetName: string | null;
+  tenantId?: string | null;
 }
 
 interface FirestoreDocument {
@@ -99,6 +100,7 @@ export async function upsertGoogleSheetSettingToFirestore(
     spreadsheetId: input.spreadsheetId,
     sheetName: input.sheetName,
     historySheetName: input.historySheetName,
+    tenantId: input.tenantId || null,
     createdAt: current?.createdAt || now,
     updatedAt: now
   };
@@ -118,6 +120,7 @@ export async function upsertGoogleSheetSettingToFirestore(
         historySheetName: nextSetting.historySheetName
           ? { stringValue: nextSetting.historySheetName }
           : { nullValue: 'NULL_VALUE' },
+        tenantId: nextSetting.tenantId ? { stringValue: nextSetting.tenantId } : { nullValue: 'NULL_VALUE' },
         createdAt: { stringValue: nextSetting.createdAt },
         updatedAt: { stringValue: nextSetting.updatedAt }
       }
@@ -147,6 +150,7 @@ function parseGoogleSheetSetting(document: FirestoreDocument, fallbackSettingKey
     spreadsheetId,
     sheetName,
     historySheetName: readNullableString(fields.historySheetName),
+    tenantId: readNullableString(fields.tenantId),
     createdAt: readString(fields.createdAt) || document.createTime || '',
     updatedAt: readString(fields.updatedAt) || document.updateTime || ''
   };

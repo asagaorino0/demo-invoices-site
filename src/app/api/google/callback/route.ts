@@ -122,7 +122,8 @@ export async function GET(request: NextRequest) {
       settingKey: DEFAULT_GOOGLE_SHEET_SETTING_KEY,
       spreadsheetId: created.spreadsheetId,
       sheetName: created.sheetName,
-      historySheetName: created.historySheetName
+      historySheetName: created.historySheetName,
+      tenantId: String(payload.issuerValues?.shopId || '').trim() || null
     });
 
     console.log('[google/callback] success', {

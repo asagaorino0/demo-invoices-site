@@ -3,6 +3,7 @@ import { readGoogleSheetValues } from './google-sheets';
 import { getGoogleSheetSetting } from './store/google-sheet-settings';
 import { getIssuerSetting } from './store/issuer-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../types';
+import type { GoogleSheetTarget } from './google-sheets';
 
 const defaultConfig: SiteConfig = {
   siteTitle: '請求書デモ',
@@ -22,6 +23,7 @@ const defaultConfig: SiteConfig = {
   issuerRepresentativeTitle: '',
   issuerStampUrl: '',
   bankNote: '振込先：○○銀行 0000000',
+  shopId: '',
   defaultTaxRate: 0.1,
   currency: 'JPY'
 };
@@ -101,7 +103,8 @@ const ISSUER_FIELD_ALIASES: Record<IssuerConfigKey, string[]> = {
     '店舗代表者肩書き'
   ],
   issuerStampUrl: ['issuerStampUrl', '印影url', '印鑑url', 'shopstampurl', '店舗印影url'],
-  bankNote: ['bankNote', '振込先', '振込先情報', 'bank']
+  bankNote: ['bankNote', '振込先', '振込先情報', 'bank'],
+  shopId: ['shopId', 'shopid', 'tenantId', 'tenantid', '店舗id', '店舗ID', 'ショップid', 'ショップID']
 };
 
 const ISSUER_META_FIELD_ALIASES = {
@@ -119,7 +122,8 @@ type IssuerConfigKey =
   | 'issuerRepresentativeName'
   | 'issuerRepresentativeTitle'
   | 'issuerStampUrl'
-  | 'bankNote';
+  | 'bankNote'
+  | 'shopId';
 
 type IssuerMetaKey = keyof typeof ISSUER_META_FIELD_ALIASES;
 type ParsedIssuerValues = Partial<SiteConfig> & Partial<Record<IssuerMetaKey, string>>;
@@ -136,6 +140,7 @@ function getBlankIssuerConfig(): Pick<
   | 'issuerRepresentativeTitle'
   | 'issuerStampUrl'
   | 'bankNote'
+  | 'shopId'
 > {
   return {
     issuerName: '',
@@ -147,7 +152,8 @@ function getBlankIssuerConfig(): Pick<
     issuerRepresentativeName: '',
     issuerRepresentativeTitle: '',
     issuerStampUrl: '',
-    bankNote: ''
+    bankNote: '',
+    shopId: ''
   };
 }
 
@@ -162,6 +168,7 @@ function toIssuerConfigOverrides(setting: {
   issuerRepresentativeTitle: string;
   issuerStampUrl: string;
   bankNote: string;
+  shopId?: string;
 }): Pick<
   SiteConfig,
   | 'issuerName'
@@ -174,6 +181,7 @@ function toIssuerConfigOverrides(setting: {
   | 'issuerRepresentativeTitle'
   | 'issuerStampUrl'
   | 'bankNote'
+  | 'shopId'
 > {
   return {
     issuerName: String(setting.issuerName || '').trim(),
@@ -185,26 +193,41 @@ function toIssuerConfigOverrides(setting: {
     issuerRepresentativeName: String(setting.issuerRepresentativeName || '').trim(),
     issuerRepresentativeTitle: String(setting.issuerRepresentativeTitle || '').trim(),
     issuerStampUrl: String(setting.issuerStampUrl || '').trim(),
-    bankNote: String(setting.bankNote || '').trim()
+    bankNote: String(setting.bankNote || '').trim(),
+    shopId: String(setting.shopId || '').trim()
   };
 }
 
 export async function loadIssuerSheetOverrides(sheetName: string): Promise<Partial<SiteConfig> | null> {
+  const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY);
+  if (!setting?.spreadsheetId) {
+    return null;
+  }
+
+  return loadIssuerSheetOverridesFromTarget(
+    {
+      spreadsheetId: setting.spreadsheetId,
+      sheetName: setting.sheetName,
+      historySheetName: setting.historySheetName
+    },
+    sheetName
+  );
+}
+
+export async function loadIssuerSheetOverridesFromTarget(
+  target: GoogleSheetTarget,
+  sheetName: string
+): Promise<Partial<SiteConfig> | null> {
   const normalizedSheetName = String(sheetName || '').trim();
   if (!normalizedSheetName) {
     return null;
   }
 
   try {
-    const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY);
-    if (!setting?.spreadsheetId) {
-      return null;
-    }
-
     const result = await readGoogleSheetValues({
-      spreadsheetId: setting.spreadsheetId,
+      spreadsheetId: target.spreadsheetId,
       sheetName: normalizedSheetName,
-      historySheetName: setting.historySheetName
+      historySheetName: target.historySheetName
     });
     return parseIssuerSheetValues(result.values);
   } catch (error) {
@@ -213,7 +236,7 @@ export async function loadIssuerSheetOverrides(sheetName: string): Promise<Parti
   }
 }
 
-function parseIssuerSheetValues(values: string[][]): Partial<SiteConfig> | null {
+export function parseIssuerSheetValues(values: string[][]): Partial<SiteConfig> | null {
   const firstDataRowIndex = values.findIndex((row) => row.some((cell) => String(cell || '').trim()));
   if (firstDataRowIndex < 0) {
     return null;

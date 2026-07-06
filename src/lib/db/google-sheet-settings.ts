@@ -13,6 +13,7 @@ export interface UpsertGoogleSheetSettingInput {
   spreadsheetId: string;
   sheetName: string;
   historySheetName: string | null;
+  tenantId?: string | null;
 }
 
 let ensureTablePromise: Promise<void> | null = null;
@@ -29,6 +30,7 @@ export async function getGoogleSheetSetting(settingKey: string): Promise<GoogleS
           spreadsheet_id as "spreadsheetId",
           sheet_name as "sheetName",
           history_sheet_name as "historySheetName",
+          tenant_id as "tenantId",
           created_at as "createdAt",
           updated_at as "updatedAt"
         from google_sheet_settings
@@ -61,6 +63,7 @@ export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
           spreadsheet_id as "spreadsheetId",
           sheet_name as "sheetName",
           history_sheet_name as "historySheetName",
+          tenant_id as "tenantId",
           created_at as "createdAt",
           updated_at as "updatedAt"
         from google_sheet_settings
@@ -99,22 +102,25 @@ export async function upsertGoogleSheetSetting(
           customer_id,
           spreadsheet_id,
           sheet_name,
-          history_sheet_name
-        ) values ($1, $2, $3, $4)
+          history_sheet_name,
+          tenant_id
+        ) values ($1, $2, $3, $4, $5)
         on conflict (customer_id) do update set
           spreadsheet_id = excluded.spreadsheet_id,
           sheet_name = excluded.sheet_name,
           history_sheet_name = excluded.history_sheet_name,
+          tenant_id = excluded.tenant_id,
           updated_at = now()
         returning
           customer_id as "settingKey",
           spreadsheet_id as "spreadsheetId",
           sheet_name as "sheetName",
           history_sheet_name as "historySheetName",
+          tenant_id as "tenantId",
           created_at as "createdAt",
           updated_at as "updatedAt"
       `,
-      [scopedSettingKey, input.spreadsheetId, input.sheetName, input.historySheetName]
+      [scopedSettingKey, input.spreadsheetId, input.sheetName, input.historySheetName, input.tenantId || null]
     );
     return result.rows[0];
   } catch (error) {
@@ -135,6 +141,7 @@ export async function upsertGoogleSheetSetting(
       spreadsheetId: input.spreadsheetId,
       sheetName: input.sheetName,
       historySheetName: input.historySheetName,
+      tenantId: input.tenantId || null,
       createdAt: existing?.createdAt || now,
       updatedAt: now
     };
@@ -156,6 +163,7 @@ async function ensureGoogleSheetSettingsTable(db: DatabaseClient): Promise<void>
           spreadsheet_id text not null,
           sheet_name text not null,
           history_sheet_name text,
+          tenant_id text,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         )

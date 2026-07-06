@@ -5,6 +5,7 @@ export interface GoogleSheetSetting {
   spreadsheetId: string;
   sheetName: string;
   historySheetName: string | null;
+  tenantId: string | null;
   createdAt: string;
   updatedAt: string;
 }

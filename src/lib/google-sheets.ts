@@ -83,6 +83,7 @@ export interface CreateGoogleSheetTargetResult {
 }
 
 export interface IssuerSheetSeed {
+  shopId?: string | null;
   issuerName?: string | null;
   issuerPostalCode?: string | null;
   issuerAddress?: string | null;
@@ -130,6 +131,7 @@ const HISTORY_HEADERS = [
 ] as const;
 
 const ISSUER_HEADERS = [
+  'shopId',
   'issuerName',
   'issuerPostalCode',
   'issuerAddress',
@@ -567,6 +569,7 @@ export async function createGoogleSheetTargetWithUserAccessToken(input: {
 
 function normalizeIssuerSheetSeed(input?: IssuerSheetSeed | null): IssuerSheetSeed {
   return {
+    shopId: String(input?.shopId || '').trim(),
     issuerName: String(input?.issuerName || '').trim(),
     issuerPostalCode: String(input?.issuerPostalCode || '').trim(),
     issuerAddress: String(input?.issuerAddress || '').trim(),
@@ -585,6 +588,7 @@ function normalizeIssuerSheetSeed(input?: IssuerSheetSeed | null): IssuerSheetSe
 function buildIssuerSheetRow(values: IssuerSheetSeed): string[] {
   const bankNote = values.bankNote || buildIssuerBankNote(values.bankName, values.bankNumber);
   return [
+    values.shopId || '',
     values.issuerName || '',
     values.issuerPostalCode || '',
     values.issuerAddress || '',

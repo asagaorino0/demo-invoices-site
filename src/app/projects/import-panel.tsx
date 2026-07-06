@@ -230,6 +230,13 @@ export function ImportPanel({
         </div>
       ) : null}
 
+      {setting && !setting.tenantId ? (
+        <div className="note" style={{ marginTop: 12, background: '#fff0e4', color: '#8a4216' }}>
+          発行者シートの `shopId` が未設定、またはまだ再保存されていません。tenant 分離を有効にするには `発行者` シートへ
+          `shopId` 列を追加してください。
+        </div>
+      ) : null}
+
       {withinDialog && !mode ? (
         <div className="dialog-choice-grid">
           <button type="button" className="dialog-choice-button" onClick={() => setMode('existing')}>
@@ -314,13 +321,13 @@ export function ImportPanel({
               disabled={savePending}
               style={inputStyle}
             />
-            <input
+            {/* <input
               placeholder="履歴シート名（任意）"
               value={form.historySheetName}
               onChange={(e) => setForm((current) => ({ ...current, historySheetName: e.target.value }))}
               disabled={savePending}
               style={inputStyle}
-            />
+            /> */}
           </div>
 
           <div className="hero-actions" style={{ marginTop: 16 }}>
@@ -386,6 +393,7 @@ function appendIssuerValues(params: URLSearchParams, issuerValues?: KonoyubiIssu
   }
 
   const entries: Array<[string, string | undefined]> = [
+    ['shopId', issuerValues.shopId],
     ['issuerName', issuerValues.issuerName],
     ['issuerPostalCode', issuerValues.issuerPostalCode],
     ['issuerAddress', issuerValues.issuerAddress],

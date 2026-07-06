@@ -10,6 +10,7 @@ const OAUTH_PAYLOAD_COOKIE = 'google_oauth_source_sheet_payload';
 
 function parseIssuerValues(searchParams: URLSearchParams) {
   return {
+    shopId: String(searchParams.get('shopId') || '').trim(),
     issuerName: String(searchParams.get('issuerName') || '').trim(),
     issuerPostalCode: String(searchParams.get('issuerPostalCode') || '').trim(),
     issuerAddress: String(searchParams.get('issuerAddress') || '').trim(),

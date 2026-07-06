@@ -146,6 +146,7 @@ function normalizeGoogleSheetSetting(value: unknown): GoogleSheetSetting {
     spreadsheetId: String(entry.spreadsheetId || '').trim(),
     sheetName: String(entry.sheetName || '').trim(),
     historySheetName: entry.historySheetName ? String(entry.historySheetName) : null,
+    tenantId: entry.tenantId ? String(entry.tenantId).trim() : null,
     createdAt: String(entry.createdAt || ''),
     updatedAt: String(entry.updatedAt || '')
   };
