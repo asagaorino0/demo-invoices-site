@@ -177,6 +177,21 @@ a {
   padding-left: 18px;
 }
 
+.legal-card {
+  display: grid;
+  gap: 10px;
+}
+
+.legal-card h2 {
+  margin: 12px 0 0;
+  color: var(--accent-strong);
+}
+
+.legal-card p,
+.legal-card li {
+  margin: 0;
+}
+
 .api-list {
   margin-top: 24px;
   display: grid;

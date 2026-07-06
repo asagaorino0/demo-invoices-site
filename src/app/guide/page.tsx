@@ -113,6 +113,22 @@ const url = buildSourceSheetAuthUrl({
 window.location.href = url;`}
         </pre>
       </section>
+
+      <section className="card" style={{ marginTop: 24 }}>
+        <p className="eyebrow">Public Links</p>
+        <h2>公開ページ</h2>
+        <p>
+          Google OAuth のブランディング設定では、この案内ページをホームページとして利用できます。
+        </p>
+        <div className="hero-actions" style={{ marginTop: 12 }}>
+          <Link className="button-link secondary" href="/privacy">
+            プライバシーポリシー
+          </Link>
+          <Link className="button-link secondary" href="/terms">
+            利用規約
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }
