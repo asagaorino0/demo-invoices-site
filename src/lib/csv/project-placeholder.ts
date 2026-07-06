@@ -20,6 +20,7 @@ export function buildProjectPlaceholderRow(project: Project): InvoiceCsvRow {
     issuerBoxWidth: String(project.issuerBoxWidth || 0),
     stampOffsetX: String(project.stampOffsetX || 0),
     stampOffsetY: String(project.stampOffsetY || 0),
+    notesBoxHeight: String(project.notesBoxHeight || 0),
     reservationId: buildProjectPlaceholderReservationId(project),
     date: '',
     service: '案件作成',

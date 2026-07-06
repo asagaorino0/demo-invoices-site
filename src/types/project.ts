@@ -44,6 +44,7 @@ export interface Project {
   issuerBoxWidth: number;
   stampOffsetX: number;
   stampOffsetY: number;
+  notesBoxHeight?: number;
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;

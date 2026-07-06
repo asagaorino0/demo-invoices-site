@@ -1043,7 +1043,9 @@ a {
 }
 
 .invoice-notes-box {
-  min-height: 88px;
+  position: relative;
+  min-height: 0;
+  height: auto;
   padding: 10px;
   border: 1px solid #7f7a80;
   font-size: 11px;
@@ -1051,6 +1053,41 @@ a {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.invoice-notes-box.resizable {
+  padding-bottom: 18px;
+}
+
+.invoice-notes-box.resizable.resizing {
+  user-select: none;
+}
+
+.invoice-notes-resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.invoice-notes-resize-handle::before {
+  content: '';
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 11px;
+  height: 11px;
+  border-right: 2px solid rgba(127, 122, 128, 0.9);
+  border-bottom: 2px solid rgba(127, 122, 128, 0.9);
+}
+
+.invoice-notes-resize-handle.active::before,
+.invoice-notes-box.resizable:hover .invoice-notes-resize-handle::before {
+  border-right-color: rgba(47, 128, 237, 0.85);
+  border-bottom-color: rgba(47, 128, 237, 0.85);
 }
 
 .invoice-footer {
@@ -1123,6 +1160,10 @@ a {
   .invoice-footer {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .invoice-notes-resize-handle {
+    display: none;
   }
 }
 

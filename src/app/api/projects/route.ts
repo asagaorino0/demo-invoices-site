@@ -41,6 +41,7 @@ export async function POST(request: Request): Promise<Response> {
       issuerBoxWidth?: number;
       stampOffsetX?: number;
       stampOffsetY?: number;
+      notesBoxHeight?: number;
     };
 
     const input = {
@@ -59,7 +60,8 @@ export async function POST(request: Request): Promise<Response> {
       issuerBoxOffsetY: Number(body.issuerBoxOffsetY || 0),
       issuerBoxWidth: Number(body.issuerBoxWidth || 0),
       stampOffsetX: Number(body.stampOffsetX || 0),
-      stampOffsetY: Number(body.stampOffsetY || 0)
+      stampOffsetY: Number(body.stampOffsetY || 0),
+      notesBoxHeight: Number(body.notesBoxHeight || 0)
     };
     const validation = validateProjectInput(input);
     if (!validation.ok) {
@@ -171,6 +173,7 @@ function buildSourceSheetProject(
     issuerBoxWidth: input.issuerBoxWidth,
     stampOffsetX: input.stampOffsetX,
     stampOffsetY: input.stampOffsetY,
+    notesBoxHeight: input.notesBoxHeight,
     status: 'draft',
     createdAt: now,
     updatedAt: now

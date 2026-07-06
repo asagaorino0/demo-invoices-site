@@ -13,6 +13,7 @@ const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   issuerboxwidth: 'issuerBoxWidth',
   stampoffsetx: 'stampOffsetX',
   stampoffsety: 'stampOffsetY',
+  notesboxheight: 'notesBoxHeight',
   reservationid: 'reservationId',
   date: 'date',
   service: 'service',
@@ -41,6 +42,7 @@ const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   送り主欄幅: 'issuerBoxWidth',
   角印x: 'stampOffsetX',
   角印y: 'stampOffsetY',
+  備考欄高さ: 'notesBoxHeight',
   表示: 'visible'
 };
 

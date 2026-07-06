@@ -86,4 +86,8 @@ async function ensureSchemaCompatibility(db: DatabaseClient): Promise<void> {
     alter table projects
     add column if not exists stamp_offset_y integer not null default 0
   `);
+  await db.query(`
+    alter table projects
+    add column if not exists notes_box_height integer not null default 0
+  `);
 }

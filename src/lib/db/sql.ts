@@ -43,6 +43,7 @@ export const projectDetailSql = `
     p.issuer_box_width as "issuerBoxWidth",
     p.stamp_offset_x as "stampOffsetX",
     p.stamp_offset_y as "stampOffsetY",
+    p.notes_box_height as "notesBoxHeight",
     p.status,
     p.created_at as "createdAt",
     p.updated_at as "updatedAt"
@@ -118,11 +119,12 @@ export const upsertProjectSql = `
     issuer_box_width,
     stamp_offset_x,
     stamp_offset_y,
+    notes_box_height,
     status,
     created_at,
     updated_at
   ) values (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, '')::date, $11, $12, $13, $14, $15, $16, $17, $18::timestamptz, $19::timestamptz
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, '')::date, $11, $12, $13, $14, $15, $16, $17, $18, $19::timestamptz, $20::timestamptz
   )
   on conflict (id) do update set
     import_id = excluded.import_id,
@@ -140,6 +142,7 @@ export const upsertProjectSql = `
     issuer_box_width = excluded.issuer_box_width,
     stamp_offset_x = excluded.stamp_offset_x,
     stamp_offset_y = excluded.stamp_offset_y,
+    notes_box_height = excluded.notes_box_height,
     status = excluded.status,
     updated_at = excluded.updated_at
 `;
@@ -223,8 +226,9 @@ export const updateProjectHeaderSql = `
     issuer_box_width = $12,
     stamp_offset_x = $13,
     stamp_offset_y = $14,
-    status = $15,
-    updated_at = $16::timestamptz
+    notes_box_height = $15,
+    status = $16,
+    updated_at = $17::timestamptz
   where id = $1
   returning
     id,
@@ -243,6 +247,7 @@ export const updateProjectHeaderSql = `
     issuer_box_width as "issuerBoxWidth",
     stamp_offset_x as "stampOffsetX",
     stamp_offset_y as "stampOffsetY",
+    notes_box_height as "notesBoxHeight",
     status,
     created_at as "createdAt",
     updated_at as "updatedAt"
@@ -329,11 +334,12 @@ export const insertProjectSql = `
     issuer_box_width,
     stamp_offset_x,
     stamp_offset_y,
+    notes_box_height,
     status,
     created_at,
     updated_at
   ) values (
-    $1, null, $2, $3, $4, $5, $6, $7, $8, nullif($9, '')::date, $10, $11, $12, $13, $14, $15, $16, $17::timestamptz, $18::timestamptz
+    $1, null, $2, $3, $4, $5, $6, $7, $8, nullif($9, '')::date, $10, $11, $12, $13, $14, $15, $16, $17, $18::timestamptz, $19::timestamptz
   )
   returning
     id,
@@ -352,6 +358,7 @@ export const insertProjectSql = `
     issuer_box_width as "issuerBoxWidth",
     stamp_offset_x as "stampOffsetX",
     stamp_offset_y as "stampOffsetY",
+    notes_box_height as "notesBoxHeight",
     status,
     created_at as "createdAt",
     updated_at as "updatedAt"

@@ -27,6 +27,8 @@ interface InvoicePreviewProps {
   onIssuerWidthChange?: (width: number) => void;
   allowStampReposition?: boolean;
   onStampPositionChange?: (position: { x: number; y: number }) => void;
+  allowNotesResize?: boolean;
+  onNotesHeightChange?: (height: number) => void;
 }
 
 const ISSUER_OFFSET_X_RANGE = { min: -220, max: 220 };
@@ -34,6 +36,7 @@ const ISSUER_OFFSET_Y_RANGE = { min: -80, max: 220 };
 const ISSUER_WIDTH_RANGE = { min: 140, max: 720 };
 const STAMP_OFFSET_X_RANGE = { min: -220, max: 120 };
 const STAMP_OFFSET_Y_RANGE = { min: -40, max: 180 };
+const NOTES_BOX_HEIGHT_RANGE = { min: 0, max: 360 };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -50,7 +53,9 @@ export function InvoicePreview({
   allowIssuerResize = false,
   onIssuerWidthChange,
   allowStampReposition = false,
-  onStampPositionChange
+  onStampPositionChange,
+  allowNotesResize = false,
+  onNotesHeightChange
 }: InvoicePreviewProps) {
   const totals = calcTotals(lines, config);
   const rows = buildDocumentRows(lines);
@@ -70,6 +75,7 @@ export function InvoicePreview({
     y: Math.round(project.stampOffsetY || 0)
   };
   const issuerBoxWidth = Math.round(project.issuerBoxWidth || 0);
+  const notesBoxHeight = Math.round(project.notesBoxHeight || 0);
   const dragStateRef = useRef<{
     pointerId: number;
     startClientX: number;
@@ -89,9 +95,15 @@ export function InvoicePreview({
     startOffsetX: number;
     startOffsetY: number;
   } | null>(null);
+  const notesResizeStateRef = useRef<{
+    pointerId: number;
+    startClientY: number;
+    startHeight: number;
+  } | null>(null);
   const [isDraggingIssuer, setIsDraggingIssuer] = useState(false);
   const [isResizingIssuerWidth, setIsResizingIssuerWidth] = useState(false);
   const [isDraggingStamp, setIsDraggingStamp] = useState(false);
+  const [isResizingNotesBox, setIsResizingNotesBox] = useState(false);
   const remarksText = [
     project.defaultRemarks,
     ...lines.map((line) => line.remarks)
@@ -264,6 +276,55 @@ export function InvoicePreview({
     setIsDraggingStamp(false);
   }
 
+  function handleNotesResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowNotesResize || !onNotesHeightChange || event.button !== 0) {
+      return;
+    }
+
+    notesResizeStateRef.current = {
+      pointerId: event.pointerId,
+      startClientY: event.clientY,
+      startHeight: clamp(
+        event.currentTarget.parentElement?.getBoundingClientRect().height || notesBoxHeight || 0,
+        NOTES_BOX_HEIGHT_RANGE.min,
+        NOTES_BOX_HEIGHT_RANGE.max
+      )
+    };
+    setIsResizingNotesBox(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function handleNotesResizePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!allowNotesResize || !onNotesHeightChange) {
+      return;
+    }
+
+    const resizeState = notesResizeStateRef.current;
+    if (!resizeState || resizeState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const nextHeight = clamp(
+      resizeState.startHeight + (event.clientY - resizeState.startClientY),
+      NOTES_BOX_HEIGHT_RANGE.min,
+      NOTES_BOX_HEIGHT_RANGE.max
+    );
+    onNotesHeightChange(Math.round(nextHeight));
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function finishNotesResize(event?: ReactPointerEvent<HTMLDivElement>) {
+    if (event && notesResizeStateRef.current?.pointerId === event.pointerId) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      event.stopPropagation();
+    }
+    notesResizeStateRef.current = null;
+    setIsResizingNotesBox(false);
+  }
+
   return (
     <div className="invoice-doc-wrap">
       <article className="invoice-doc">
@@ -394,7 +455,25 @@ export function InvoicePreview({
         {remarksText ? (
           <div className="invoice-notes">
             <div className="invoice-notes-label">備考</div>
-            <div className="invoice-notes-box">{remarksText}</div>
+            <div
+              className={`invoice-notes-box${allowNotesResize ? ' resizable' : ''}${isResizingNotesBox ? ' resizing' : ''}`}
+              style={{
+                height: notesBoxHeight > 0 ? `${notesBoxHeight}px` : undefined
+              }}
+            >
+              {remarksText}
+              {allowNotesResize ? (
+                <div
+                  className={`invoice-notes-resize-handle${isResizingNotesBox ? ' active' : ''}`}
+                  role="presentation"
+                  aria-hidden="true"
+                  onPointerDown={handleNotesResizePointerDown}
+                  onPointerMove={handleNotesResizePointerMove}
+                  onPointerUp={finishNotesResize}
+                  onPointerCancel={finishNotesResize}
+                />
+              ) : null}
+            </div>
           </div>
         ) : null}
 

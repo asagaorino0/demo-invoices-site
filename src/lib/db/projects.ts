@@ -69,6 +69,7 @@ export interface UpdateProjectHeaderInput {
   issuerBoxWidth: number;
   stampOffsetX: number;
   stampOffsetY: number;
+  notesBoxHeight: number;
   status: Project['status'];
 }
 
@@ -111,6 +112,7 @@ export interface CreateProjectInput {
   issuerBoxWidth: number;
   stampOffsetX: number;
   stampOffsetY: number;
+  notesBoxHeight: number;
 }
 
 interface ProjectIdentityRow {
@@ -418,6 +420,7 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
       input.issuerBoxWidth,
       input.stampOffsetX,
       input.stampOffsetY,
+      input.notesBoxHeight,
       input.status,
       now
     ]);
@@ -444,6 +447,7 @@ export async function updateProjectHeader(input: UpdateProjectHeaderInput): Prom
       issuerBoxWidth: input.issuerBoxWidth,
       stampOffsetX: input.stampOffsetX,
       stampOffsetY: input.stampOffsetY,
+      notesBoxHeight: input.notesBoxHeight,
       status: input.status,
       updatedAt: now
     };
@@ -709,6 +713,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
         input.issuerBoxWidth,
         input.stampOffsetX,
         input.stampOffsetY,
+        input.notesBoxHeight,
         'draft',
         now,
         now
@@ -737,6 +742,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       issuerBoxWidth: input.issuerBoxWidth,
       stampOffsetX: input.stampOffsetX,
       stampOffsetY: input.stampOffsetY,
+      notesBoxHeight: input.notesBoxHeight,
       status: 'draft',
       createdAt: now,
       updatedAt: now
@@ -1067,6 +1073,7 @@ export async function upsertProjectSnapshot(project: Project): Promise<Project> 
       project.issuerBoxWidth,
       project.stampOffsetX,
       project.stampOffsetY,
+      project.notesBoxHeight || 0,
       project.status,
       project.createdAt,
       project.updatedAt
@@ -1109,6 +1116,7 @@ export async function upsertProjectDetailSnapshot(input: {
         project.issuerBoxWidth,
         project.stampOffsetX,
         project.stampOffsetY,
+        project.notesBoxHeight || 0,
         project.status,
         project.createdAt,
         project.updatedAt

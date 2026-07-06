@@ -34,6 +34,7 @@ interface NormalizedRow {
   issuerBoxWidth: number;
   stampOffsetX: number;
   stampOffsetY: number;
+  notesBoxHeight: number;
   reservationId: string;
   serviceDate: string | null;
   serviceName: string;
@@ -104,7 +105,8 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
         issuerBoxOffsetY: parseNumber(row.issuerBoxOffsetY, 0),
         issuerBoxWidth: parseNumber(row.issuerBoxWidth, 0),
         stampOffsetX: parseNumber(row.stampOffsetX, 0),
-        stampOffsetY: parseNumber(row.stampOffsetY, 0)
+        stampOffsetY: parseNumber(row.stampOffsetY, 0),
+        notesBoxHeight: parseNumber(row.notesBoxHeight, 0)
       };
       const projectId = stableId('project', placeholderRow.customerId);
       const existing = projectMap.get(projectId);
@@ -129,6 +131,7 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
           issuerBoxWidth: placeholderRow.issuerBoxWidth,
           stampOffsetX: placeholderRow.stampOffsetX,
           stampOffsetY: placeholderRow.stampOffsetY,
+          notesBoxHeight: placeholderRow.notesBoxHeight,
           status: 'draft',
           createdAt: now,
           updatedAt: now
@@ -197,6 +200,7 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
       issuerBoxWidth: parseNumber(row.issuerBoxWidth, 0),
       stampOffsetX: parseNumber(row.stampOffsetX, 0),
       stampOffsetY: parseNumber(row.stampOffsetY, 0),
+      notesBoxHeight: parseNumber(row.notesBoxHeight, 0),
       reservationId,
       serviceDate: readDate(row.date),
       serviceName: readString(row.service),
@@ -241,6 +245,7 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
         issuerBoxWidth: row.issuerBoxWidth,
         stampOffsetX: row.stampOffsetX,
         stampOffsetY: row.stampOffsetY,
+        notesBoxHeight: row.notesBoxHeight,
         status: 'draft',
         createdAt: now,
         updatedAt: now
@@ -273,6 +278,9 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
       }
       if (project.stampOffsetY === 0 && row.stampOffsetY !== 0) {
         project.stampOffsetY = row.stampOffsetY;
+      }
+      if ((project.notesBoxHeight || 0) === 0 && row.notesBoxHeight !== 0) {
+        project.notesBoxHeight = row.notesBoxHeight;
       }
       project.updatedAt = now;
     }

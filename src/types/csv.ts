@@ -11,6 +11,7 @@ export interface InvoiceCsvRow {
   issuerBoxWidth: string;
   stampOffsetX: string;
   stampOffsetY: string;
+  notesBoxHeight: string;
   reservationId: string;
   date: string;
   service: string;
@@ -60,6 +61,7 @@ export const INVOICE_CSV_HEADERS: Array<keyof InvoiceCsvRow> = [
   'issuerBoxWidth',
   'stampOffsetX',
   'stampOffsetY',
+  'notesBoxHeight',
   'reservationId',
   'date',
   'service',

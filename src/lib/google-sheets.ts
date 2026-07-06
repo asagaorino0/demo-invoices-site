@@ -155,6 +155,7 @@ const HISTORY_FIELD_LABELS: Partial<Record<keyof InvoiceCsvRow | 'reservationId'
   issuerBoxWidth: '送り主欄幅',
   stampOffsetX: '角印X',
   stampOffsetY: '角印Y',
+  notesBoxHeight: '備考欄高さ',
   reservationId: '明細',
   date: 'サービス日',
   service: 'サービス名',
@@ -1067,7 +1068,8 @@ function buildHeaderLabels(values: string[]): string[] {
     'issuerBoxOffsetY',
     'issuerBoxWidth',
     'stampOffsetX',
-    'stampOffsetY'
+    'stampOffsetY',
+    'notesBoxHeight'
   ]);
   const requiredMissingHeaders = missingHeaders.filter((header) => !optionalHeaders.has(header));
 

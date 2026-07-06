@@ -452,6 +452,7 @@ export function ProjectEditor({
     issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
     stampOffsetX: project.stampOffsetX || 0,
     stampOffsetY: project.stampOffsetY || 0,
+    notesBoxHeight: project.notesBoxHeight || 0,
     status: project.status
   });
   const [savedHeader, setSavedHeader] = useState({
@@ -468,6 +469,7 @@ export function ProjectEditor({
     issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
     stampOffsetX: project.stampOffsetX || 0,
     stampOffsetY: project.stampOffsetY || 0,
+    notesBoxHeight: project.notesBoxHeight || 0,
     status: project.status
   });
   const [sheetSyncStatus, setSheetSyncStatus] = useState(project.status);
@@ -538,6 +540,7 @@ export function ProjectEditor({
     form.issuerBoxOffsetY !== savedHeader.issuerBoxOffsetY ||
     form.stampOffsetX !== savedHeader.stampOffsetX ||
     form.stampOffsetY !== savedHeader.stampOffsetY ||
+    form.notesBoxHeight !== savedHeader.notesBoxHeight ||
     form.status !== savedHeader.status;
   const isLineDirty =
     !!editingLine &&
@@ -645,6 +648,7 @@ export function ProjectEditor({
       issuerBoxOffsetY: form.issuerBoxOffsetY,
       stampOffsetX: form.stampOffsetX,
       stampOffsetY: form.stampOffsetY,
+      notesBoxHeight: form.notesBoxHeight,
       status: form.status
     }),
     [form, project]
@@ -753,16 +757,25 @@ export function ProjectEditor({
       return;
     }
 
+    const hasUnsavedProjectChanges = hasSelectionChanges || isHeaderDirty || isReceiptDateDirty;
+
     if (hasSelectionChanges) {
       document.body.dataset.selectionDirty = 'true';
     } else {
       delete document.body.dataset.selectionDirty;
     }
 
+    if (hasUnsavedProjectChanges) {
+      document.body.dataset.projectDirty = 'true';
+    } else {
+      delete document.body.dataset.projectDirty;
+    }
+
     return () => {
       delete document.body.dataset.selectionDirty;
+      delete document.body.dataset.projectDirty;
     };
-  }, [hasSelectionChanges]);
+  }, [hasSelectionChanges, isHeaderDirty, isReceiptDateDirty]);
 
   useEffect(() => {
     const nextHeader = {
@@ -779,6 +792,7 @@ export function ProjectEditor({
       issuerBoxOffsetY: project.issuerBoxOffsetY || 0,
       stampOffsetX: project.stampOffsetX || 0,
       stampOffsetY: project.stampOffsetY || 0,
+      notesBoxHeight: project.notesBoxHeight || 0,
       status: project.status
     };
     setForm(nextHeader);
@@ -1116,6 +1130,7 @@ export function ProjectEditor({
       issuerBoxOffsetY: form.issuerBoxOffsetY,
       stampOffsetX: form.stampOffsetX,
       stampOffsetY: form.stampOffsetY,
+      notesBoxHeight: form.notesBoxHeight,
       status: form.status
     });
     setSheetSyncStatus(form.status);
@@ -2596,38 +2611,67 @@ export function ProjectEditor({
                   {invoiceLines.length === 0 ? (
                     <p>請求対象の未回収明細を選ぶと、ここに請求書が表示されます。</p>
                   ) : (
-                    <div ref={invoicePrintRef}>
-                      <InvoicePreview
-                        config={config}
-                        project={previewProject}
-                        lines={invoiceLines}
-                        kind="invoice"
-                        stampRenderKey={printRenderNonce}
-                        allowIssuerReposition
-                        allowIssuerResize
-                        allowStampReposition
-                        onIssuerWidthChange={(width) =>
-                          setForm((current) => ({
-                            ...current,
-                            issuerBoxWidth: width
-                          }))
-                        }
-                        onIssuerPositionChange={(position) =>
-                          setForm((current) => ({
-                            ...current,
-                            issuerBoxOffsetX: position.x,
-                            issuerBoxOffsetY: position.y
-                          }))
-                        }
-                        onStampPositionChange={(position) =>
-                          setForm((current) => ({
-                            ...current,
-                            stampOffsetX: position.x,
-                            stampOffsetY: position.y
-                          }))
-                        }
-                      />
-                    </div>
+                    <>
+                      <div ref={invoicePrintRef}>
+                        <InvoicePreview
+                          config={config}
+                          project={previewProject}
+                          lines={invoiceLines}
+                          kind="invoice"
+                          stampRenderKey={printRenderNonce}
+                          allowIssuerReposition
+                          allowIssuerResize
+                          allowStampReposition
+                          allowNotesResize
+                          onIssuerWidthChange={(width) =>
+                            setForm((current) => ({
+                              ...current,
+                              issuerBoxWidth: width
+                            }))
+                          }
+                          onIssuerPositionChange={(position) =>
+                            setForm((current) => ({
+                              ...current,
+                              issuerBoxOffsetX: position.x,
+                              issuerBoxOffsetY: position.y
+                            }))
+                          }
+                          onStampPositionChange={(position) =>
+                            setForm((current) => ({
+                              ...current,
+                              stampOffsetX: position.x,
+                              stampOffsetY: position.y
+                            }))
+                          }
+                          onNotesHeightChange={(height) =>
+                            setForm((current) => ({
+                              ...current,
+                              notesBoxHeight: height
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="invoice-preview-position-tools" style={{ marginTop: 18 }}>
+                        <span className="invoice-preview-subject-label">備考欄の高さ</span>
+                        <div className="invoice-preview-position-actions">
+                          <button
+                            className="button-link secondary"
+                            type="button"
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                notesBoxHeight: 0
+                              }))
+                            }
+                          >
+                            高さをリセット
+                          </button>
+                        </div>
+                        <span className="invoice-preview-subject-help">
+                          備考欄の右下をドラッグすると高さを調整できます。未設定時は内容に合わせて表示されます。
+                        </span>
+                      </div>
+                    </>
                   )}
                 </section>
               </div>
@@ -2674,6 +2718,26 @@ export function ProjectEditor({
                             </span>
                           </label>
                         </div>
+                        <div className="invoice-preview-position-tools">
+                          <span className="invoice-preview-subject-label">備考欄の高さ</span>
+                          <div className="invoice-preview-position-actions">
+                            <button
+                              className="button-link secondary"
+                              type="button"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  notesBoxHeight: 0
+                                }))
+                              }
+                            >
+                              高さをリセット
+                            </button>
+                          </div>
+                          <span className="invoice-preview-subject-help">
+                            備考欄の右下をドラッグすると高さを調整できます。未設定時は内容に合わせて表示されます。
+                          </span>
+                        </div>
                       </div>
                       <div ref={receiptPrintRef}>
                         <InvoicePreview
@@ -2684,6 +2748,7 @@ export function ProjectEditor({
                           stampRenderKey={printRenderNonce}
                           allowIssuerResize
                           allowStampReposition
+                          allowNotesResize
                           onIssuerWidthChange={(width) =>
                             setForm((current) => ({
                               ...current,
@@ -2695,6 +2760,12 @@ export function ProjectEditor({
                               ...current,
                               stampOffsetX: position.x,
                               stampOffsetY: position.y
+                            }))
+                          }
+                          onNotesHeightChange={(height) =>
+                            setForm((current) => ({
+                              ...current,
+                              notesBoxHeight: height
                             }))
                           }
                         />

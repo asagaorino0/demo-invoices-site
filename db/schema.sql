@@ -25,6 +25,7 @@ create table if not exists projects (
   issuer_box_width integer not null default 0,
   stamp_offset_x integer not null default 0,
   stamp_offset_y integer not null default 0,
+  notes_box_height integer not null default 0,
   status text not null default 'draft' check (status in ('draft', 'ready_for_export', 'exported')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

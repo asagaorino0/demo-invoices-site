@@ -25,6 +25,10 @@ export function SourceSheetLiveRefresh({ enabled }: { enabled: boolean }) {
         return true;
       }
 
+      if (document.body?.dataset.projectDirty === 'true') {
+        return true;
+      }
+
       if (document.querySelector('[aria-modal="true"], [role="dialog"]')) {
         return true;
       }

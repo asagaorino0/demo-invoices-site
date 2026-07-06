@@ -52,6 +52,7 @@ export async function PATCH(
       issuerBoxWidth?: number;
       stampOffsetX?: number;
       stampOffsetY?: number;
+      notesBoxHeight?: number;
       status?: 'draft' | 'ready_for_export' | 'exported';
     };
 
@@ -73,6 +74,7 @@ export async function PATCH(
       issuerBoxWidth: Number(body.issuerBoxWidth || 0),
       stampOffsetX: Number(body.stampOffsetX || 0),
       stampOffsetY: Number(body.stampOffsetY || 0),
+      notesBoxHeight: Number(body.notesBoxHeight || 0),
       status: body.status || 'draft'
     });
 

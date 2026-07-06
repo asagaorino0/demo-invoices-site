@@ -12,6 +12,10 @@ export function SourceSheetRefreshButton() {
       return true;
     }
 
+    if (document.body?.dataset.projectDirty === 'true') {
+      return true;
+    }
+
     if (document.body?.dataset.printDialogOpen === 'true') {
       return true;
     }
@@ -22,7 +26,7 @@ export function SourceSheetRefreshButton() {
   function handleRefresh() {
     if (hasUnsavedUiState()) {
       const shouldContinue = window.confirm(
-        '未保存の選択や開いているダイアログがあります。スプレッドシートを再読込すると、画面上の編集中の状態が戻ることがあります。続けますか？'
+        '未保存の変更や開いているダイアログがあります。スプレッドシートを再読込すると、画面上の編集中の状態が戻ることがあります。続けますか？'
       );
       if (!shouldContinue) {
         return;
