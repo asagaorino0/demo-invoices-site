@@ -5,6 +5,7 @@ import { getGoogleSheetSetting } from '../../../lib/store/google-sheet-settings'
 import { getGoogleSheetsErrorStatus, readGoogleSheetValues, syncProjectToGoogleSheet } from '../../../lib/google-sheets';
 import { normalizeHeader, stableId } from '../../../lib/csv/shared';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type Project } from '../../../types';
+import { getCurrentWorkspaceKey, scopeEntityId } from '../../../lib/workspace';
 
 export async function GET(): Promise<Response> {
   try {
@@ -27,6 +28,7 @@ export async function GET(): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    const workspaceKey = await getCurrentWorkspaceKey();
     const body = (await request.json()) as {
       customerName?: string;
       subject?: string;
@@ -86,7 +88,7 @@ export async function POST(request: Request): Promise<Response> {
         const project = buildSourceSheetProject({
           ...input,
           customerId: sourceSheetCustomerId || ''
-        });
+        }, workspaceKey);
         const result = await syncProjectToGoogleSheet({
           project,
           serviceLines: [],
@@ -152,12 +154,13 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 function buildSourceSheetProject(
-  input: Omit<Project, 'id' | 'importId' | 'status' | 'createdAt' | 'updatedAt'> & { customerId: string }
+  input: Omit<Project, 'id' | 'importId' | 'status' | 'createdAt' | 'updatedAt'> & { customerId: string },
+  workspaceKey: string
 ): Project {
   const now = new Date().toISOString();
 
   return {
-    id: stableId('project', input.customerId),
+    id: scopeEntityId(workspaceKey, stableId('project', input.customerId)),
     importId: null,
     customerId: input.customerId,
     customerName: input.customerName,

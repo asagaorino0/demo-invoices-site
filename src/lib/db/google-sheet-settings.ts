@@ -6,6 +6,7 @@ import {
 } from '../firestore/google-sheet-settings';
 import { readLocalStore, writeLocalStore } from '../local-store';
 import { getDb, type DatabaseClient } from './client';
+import { getCurrentWorkspaceKey, scopeSettingKey, scopeSettingPrefix } from '../workspace';
 
 export interface UpsertGoogleSheetSettingInput {
   settingKey: string;
@@ -17,6 +18,7 @@ export interface UpsertGoogleSheetSettingInput {
 let ensureTablePromise: Promise<void> | null = null;
 
 export async function getGoogleSheetSetting(settingKey: string): Promise<GoogleSheetSetting | null> {
+  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), settingKey);
   try {
     const db = await getDb();
     await ensureGoogleSheetSettingsTable(db);
@@ -32,22 +34,23 @@ export async function getGoogleSheetSetting(settingKey: string): Promise<GoogleS
         from google_sheet_settings
         where customer_id = $1
       `,
-      [settingKey]
+      [scopedSettingKey]
     );
     return result.rows[0] || null;
   } catch (error) {
     if (!shouldFallbackToFirestoreOrLocal(error)) throw error;
     try {
-      return await getGoogleSheetSettingFromFirestore(settingKey);
+      return await getGoogleSheetSettingFromFirestore(scopedSettingKey);
     } catch (firestoreError) {
       if (!shouldUseLocalStore(firestoreError)) throw firestoreError;
     }
     const store = await readLocalStore();
-    return store.googleSheetSettings.find((item) => item.settingKey === settingKey) || null;
+    return store.googleSheetSettings.find((item) => item.settingKey === scopedSettingKey) || null;
   }
 }
 
 export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     const db = await getDb();
     await ensureGoogleSheetSettingsTable(db);
@@ -61,14 +64,18 @@ export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
           created_at as "createdAt",
           updated_at as "updatedAt"
         from google_sheet_settings
+        where customer_id like $1
         order by updated_at desc, customer_id asc
-      `
+      `,
+      [`${scopeSettingPrefix(workspaceKey)}%`]
     );
     return result.rows;
   } catch (error) {
     if (!shouldFallbackToFirestoreOrLocal(error)) throw error;
     try {
-      return await listGoogleSheetSettingsFromFirestore();
+      return (await listGoogleSheetSettingsFromFirestore()).filter((item) =>
+        item.settingKey.startsWith(scopeSettingPrefix(workspaceKey))
+      );
     } catch (firestoreError) {
       if (!shouldUseLocalStore(firestoreError)) throw firestoreError;
     }
@@ -82,6 +89,7 @@ export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
 export async function upsertGoogleSheetSetting(
   input: UpsertGoogleSheetSettingInput
 ): Promise<GoogleSheetSetting> {
+  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), input.settingKey);
   try {
     const db = await getDb();
     await ensureGoogleSheetSettingsTable(db);
@@ -106,28 +114,31 @@ export async function upsertGoogleSheetSetting(
           created_at as "createdAt",
           updated_at as "updatedAt"
       `,
-      [input.settingKey, input.spreadsheetId, input.sheetName, input.historySheetName]
+      [scopedSettingKey, input.spreadsheetId, input.sheetName, input.historySheetName]
     );
     return result.rows[0];
   } catch (error) {
     if (!shouldFallbackToFirestoreOrLocal(error)) throw error;
     try {
-      return await upsertGoogleSheetSettingToFirestore(input);
+      return await upsertGoogleSheetSettingToFirestore({
+        ...input,
+        settingKey: scopedSettingKey
+      });
     } catch (firestoreError) {
       if (!shouldUseLocalStore(firestoreError)) throw firestoreError;
     }
     const store = await readLocalStore();
     const now = new Date().toISOString();
-    const existing = store.googleSheetSettings.find((item) => item.settingKey === input.settingKey);
+    const existing = store.googleSheetSettings.find((item) => item.settingKey === scopedSettingKey);
     const nextSetting: GoogleSheetSetting = {
-      settingKey: input.settingKey,
+      settingKey: scopedSettingKey,
       spreadsheetId: input.spreadsheetId,
       sheetName: input.sheetName,
       historySheetName: input.historySheetName,
       createdAt: existing?.createdAt || now,
       updatedAt: now
     };
-    const nextSettings = store.googleSheetSettings.filter((item) => item.settingKey !== input.settingKey);
+    const nextSettings = store.googleSheetSettings.filter((item) => item.settingKey !== scopedSettingKey);
     await writeLocalStore({
       ...store,
       googleSheetSettings: [...nextSettings, nextSetting].sort((a, b) => a.settingKey.localeCompare(b.settingKey, 'ja'))

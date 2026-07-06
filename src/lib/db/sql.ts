@@ -17,10 +17,12 @@ export const projectSummarySql = `
     )::int as "selectedCount"
   from projects p
   left join imports i on i.id = p.import_id
-  left join service_lines sl on sl.project_id = p.id
+  left join service_lines sl on sl.project_id = p.id and sl.workspace_key = p.workspace_key
   left join invoice_selections sel
     on sel.project_id = p.id
     and sel.line_id = sl.id
+    and sel.workspace_key = p.workspace_key
+  where p.workspace_key = $1
   group by p.id, i.imported_at
   order by p.customer_name asc, p.created_at asc
 `;
@@ -48,7 +50,8 @@ export const projectDetailSql = `
     p.created_at as "createdAt",
     p.updated_at as "updatedAt"
   from projects p
-  where p.id = $1
+  where p.workspace_key = $1
+    and p.id = $2
 `;
 
 export const projectServiceLinesSql = `
@@ -75,7 +78,8 @@ export const projectServiceLinesSql = `
     sl.created_at as "createdAt",
     sl.updated_at as "updatedAt"
   from service_lines sl
-  where sl.project_id = $1
+  where sl.workspace_key = $1
+    and sl.project_id = $2
   order by sl.sort_key desc, sl.reservation_id asc
 `;
 
@@ -87,23 +91,26 @@ export const projectSelectionsSql = `
     selection_batch_key as "selectionBatchKey",
     updated_at as "updatedAt"
   from invoice_selections
-  where project_id = $1
+  where workspace_key = $1
+    and project_id = $2
   order by updated_at asc, line_id asc
 `;
 
 export const insertImportSql = `
   insert into imports (
     id,
+    workspace_key,
     source_name,
     source_type,
     row_count,
     warning_json
-  ) values ($1, $2, $3, $4, $5::jsonb)
+  ) values ($1, $2, $3, $4, $5, $6::jsonb)
 `;
 
 export const upsertProjectSql = `
   insert into projects (
     id,
+    workspace_key,
     import_id,
     customer_id,
     customer_name,
@@ -124,9 +131,10 @@ export const upsertProjectSql = `
     created_at,
     updated_at
   ) values (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, '')::date, $11, $12, $13, $14, $15, $16, $17, $18, $19::timestamptz, $20::timestamptz
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, nullif($11, '')::date, $12, $13, $14, $15, $16, $17, $18, $19, $20::timestamptz, $21::timestamptz
   )
   on conflict (id) do update set
+    workspace_key = excluded.workspace_key,
     import_id = excluded.import_id,
     customer_id = excluded.customer_id,
     customer_name = excluded.customer_name,
@@ -150,6 +158,7 @@ export const upsertProjectSql = `
 export const upsertServiceLineSql = `
   insert into service_lines (
     id,
+    workspace_key,
     project_id,
     reservation_id,
     service_date,
@@ -171,10 +180,11 @@ export const upsertServiceLineSql = `
     created_at,
     updated_at
   ) values (
-    $1, $2, $3, nullif($4, '')::date, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14,
-    $15, nullif($16, '')::date, nullif($17, '')::date, $18, $19, $20::timestamptz, $21::timestamptz
+    $1, $2, $3, $4, nullif($5, '')::date, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15,
+    $16, nullif($17, '')::date, nullif($18, '')::date, $19, $20, $21::timestamptz, $22::timestamptz
   )
   on conflict (id) do update set
+    workspace_key = excluded.workspace_key,
     project_id = excluded.project_id,
     reservation_id = excluded.reservation_id,
     service_date = excluded.service_date,
@@ -198,13 +208,15 @@ export const upsertServiceLineSql = `
 
 export const upsertInvoiceSelectionSql = `
   insert into invoice_selections (
+    workspace_key,
     project_id,
     line_id,
     selected_for_invoice,
     selection_batch_key,
     updated_at
-  ) values ($1, $2, $3, $4, $5::timestamptz)
+  ) values ($1, $2, $3, $4, $5, $6::timestamptz)
   on conflict (project_id, line_id) do update set
+    workspace_key = excluded.workspace_key,
     selected_for_invoice = excluded.selected_for_invoice,
     selection_batch_key = excluded.selection_batch_key,
     updated_at = excluded.updated_at
@@ -213,23 +225,24 @@ export const upsertInvoiceSelectionSql = `
 export const updateProjectHeaderSql = `
   update projects
   set
-    customer_name = $2,
-    subject = $3,
-    default_invoice_date_mode = $4,
-    invoice_recipient = $5,
-    facility_name = $6,
-    company_name = $7,
-    issue_date = nullif($8, '')::date,
-    default_remarks = $9,
-    issuer_box_offset_x = $10,
-    issuer_box_offset_y = $11,
-    issuer_box_width = $12,
-    stamp_offset_x = $13,
-    stamp_offset_y = $14,
-    notes_box_height = $15,
-    status = $16,
-    updated_at = $17::timestamptz
-  where id = $1
+    customer_name = $3,
+    subject = $4,
+    default_invoice_date_mode = $5,
+    invoice_recipient = $6,
+    facility_name = $7,
+    company_name = $8,
+    issue_date = nullif($9, '')::date,
+    default_remarks = $10,
+    issuer_box_offset_x = $11,
+    issuer_box_offset_y = $12,
+    issuer_box_width = $13,
+    stamp_offset_x = $14,
+    stamp_offset_y = $15,
+    notes_box_height = $16,
+    status = $17,
+    updated_at = $18::timestamptz
+  where workspace_key = $1
+    and id = $2
   returning
     id,
     import_id as "importId",
@@ -257,30 +270,32 @@ export const resetProjectSelectionsSql = `
   update invoice_selections
   set
     selected_for_invoice = false,
-    updated_at = $2::timestamptz
-  where project_id = $1
+    updated_at = $3::timestamptz
+  where workspace_key = $1
+    and project_id = $2
 `;
 
 export const updateServiceLineSql = `
   update service_lines
   set
-    service_date = nullif($3, '')::date,
-    service_name = $4,
-    staff_name = $5,
-    price = $6,
-    quantity = $7,
-    unit = $8,
-    tax_included = $9,
-    remarks = $10,
-    memo = $11,
-    visible = $12,
-    collection_status = $13,
-    collected_at = nullif($14, '')::date,
-    receipt_issued_at = nullif($15, '')::date,
-    sort_key = $16,
-    updated_at = $17::timestamptz
-  where id = $1
-    and project_id = $2
+    service_date = nullif($4, '')::date,
+    service_name = $5,
+    staff_name = $6,
+    price = $7,
+    quantity = $8,
+    unit = $9,
+    tax_included = $10,
+    remarks = $11,
+    memo = $12,
+    visible = $13,
+    collection_status = $14,
+    collected_at = nullif($15, '')::date,
+    receipt_issued_at = nullif($16, '')::date,
+    sort_key = $17,
+    updated_at = $18::timestamptz
+  where workspace_key = $1
+    and id = $2
+    and project_id = $3
   returning
     id,
     project_id as "projectId",
@@ -308,17 +323,19 @@ export const updateServiceLineSql = `
 export const insertExportJobSql = `
   insert into export_jobs (
     id,
+    workspace_key,
     project_id,
     export_type,
     exported_row_count,
     file_name,
     created_at
-  ) values ($1, $2, $3, $4, $5, $6::timestamptz)
+  ) values ($1, $2, $3, $4, $5, $6, $7::timestamptz)
 `;
 
 export const insertProjectSql = `
   insert into projects (
     id,
+    workspace_key,
     import_id,
     customer_id,
     customer_name,
@@ -339,7 +356,7 @@ export const insertProjectSql = `
     created_at,
     updated_at
   ) values (
-    $1, null, $2, $3, $4, $5, $6, $7, $8, nullif($9, '')::date, $10, $11, $12, $13, $14, $15, $16, $17, $18::timestamptz, $19::timestamptz
+    $1, $2, null, $3, $4, $5, $6, $7, $8, $9, nullif($10, '')::date, $11, $12, $13, $14, $15, $16, $17, $18, $19::timestamptz, $20::timestamptz
   )
   returning
     id,
@@ -367,6 +384,7 @@ export const insertProjectSql = `
 export const insertServiceLineSql = `
   insert into service_lines (
     id,
+    workspace_key,
     project_id,
     reservation_id,
     service_date,
@@ -388,8 +406,8 @@ export const insertServiceLineSql = `
     created_at,
     updated_at
   ) values (
-    $1, $2, $3, nullif($4, '')::date, $5, $6, $7, $8, $9, $10, '[]'::jsonb, $11, $12, $13,
-    $14, nullif($15, '')::date, nullif($16, '')::date, $17, $18, $19::timestamptz, $20::timestamptz
+    $1, $2, $3, $4, nullif($5, '')::date, $6, $7, $8, $9, $10, $11, '[]'::jsonb, $12, $13, $14,
+    $15, nullif($16, '')::date, nullif($17, '')::date, $18, $19, $20::timestamptz, $21::timestamptz
   )
   returning
     id,
@@ -419,20 +437,23 @@ export const markProjectExportedSql = `
   update projects
   set
     status = 'exported',
-    updated_at = $2::timestamptz
-  where id = $1
+    updated_at = $3::timestamptz
+  where workspace_key = $1
+    and id = $2
 `;
 
 export const markProjectDraftSql = `
   update projects
   set
     status = 'draft',
-    updated_at = $2::timestamptz
-  where id = $1
+    updated_at = $3::timestamptz
+  where workspace_key = $1
+    and id = $2
 `;
 
 export const deleteServiceLineSql = `
   delete from service_lines
-  where id = $1
-    and project_id = $2
+  where workspace_key = $1
+    and id = $2
+    and project_id = $3
 `;

@@ -17,6 +17,7 @@ import {
 } from './shared';
 import { isProjectPlaceholderRow } from './project-placeholder';
 import { normalizeCompanyName } from '../project-fields';
+import { scopeEntityId } from '../workspace';
 
 type RawRow = Partial<Record<keyof InvoiceCsvRow, unknown>>;
 
@@ -69,11 +70,15 @@ export function parseInvoiceCsvText(text: string): InvoiceCsvRow[] {
   });
 }
 
-export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
+export function importInvoiceCsvRows(
+  rows: RawRow[],
+  options?: { workspaceKey?: string }
+): InvoiceImportBundle {
   const warnings: InvoiceImportWarning[] = [];
   const normalizedRows: NormalizedRow[] = [];
   const now = isoNow();
   const projectMap = new Map<string, Project>();
+  const workspaceKey = String(options?.workspaceKey || '').trim();
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2;
@@ -108,7 +113,7 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
         stampOffsetY: parseNumber(row.stampOffsetY, 0),
         notesBoxHeight: parseNumber(row.notesBoxHeight, 0)
       };
-      const projectId = stableId('project', placeholderRow.customerId);
+      const projectId = buildScopedId(workspaceKey, stableId('project', placeholderRow.customerId));
       const existing = projectMap.get(projectId);
 
       if (!existing) {
@@ -224,8 +229,8 @@ export function importInvoiceCsvRows(rows: RawRow[]): InvoiceImportBundle {
   const serviceLines: ServiceLine[] = [];
 
   normalizedRows.forEach((row) => {
-    const projectId = buildProjectId(row);
-    const lineId = stableId('line', row.customerId, row.reservationId);
+    const projectId = buildProjectId(row, workspaceKey);
+    const lineId = buildScopedId(workspaceKey, stableId('line', row.customerId, row.reservationId));
 
     if (!projectMap.has(projectId)) {
       projectMap.set(projectId, {
@@ -346,8 +351,12 @@ function buildSelections(projects: Project[], serviceLines: ServiceLine[], now: 
   });
 }
 
-function buildProjectId(row: NormalizedRow): string {
-  return stableId('project', row.customerId);
+function buildProjectId(row: NormalizedRow, workspaceKey: string): string {
+  return buildScopedId(workspaceKey, stableId('project', row.customerId));
+}
+
+function buildScopedId(workspaceKey: string, baseId: string): string {
+  return workspaceKey ? scopeEntityId(workspaceKey, baseId) : baseId;
 }
 
 function buildSortKey(serviceDate: string | null): number {

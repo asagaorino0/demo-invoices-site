@@ -59,6 +59,26 @@ async function createClient(): Promise<DatabaseClient> {
 async function ensureSchemaCompatibility(db: DatabaseClient): Promise<void> {
   await db.query(`
     alter table projects
+    add column if not exists workspace_key text not null default 'legacy-global'
+  `);
+  await db.query(`
+    alter table service_lines
+    add column if not exists workspace_key text not null default 'legacy-global'
+  `);
+  await db.query(`
+    alter table invoice_selections
+    add column if not exists workspace_key text not null default 'legacy-global'
+  `);
+  await db.query(`
+    alter table imports
+    add column if not exists workspace_key text not null default 'legacy-global'
+  `);
+  await db.query(`
+    alter table export_jobs
+    add column if not exists workspace_key text not null default 'legacy-global'
+  `);
+  await db.query(`
+    alter table projects
     add column if not exists default_invoice_date_mode text not null default 'monthEnd'
       check (default_invoice_date_mode in ('visit', 'monthEnd', 'custom'))
   `);
@@ -89,5 +109,17 @@ async function ensureSchemaCompatibility(db: DatabaseClient): Promise<void> {
   await db.query(`
     alter table projects
     add column if not exists notes_box_height integer not null default 0
+  `);
+  await db.query(`
+    create index if not exists idx_projects_workspace_key
+    on projects(workspace_key)
+  `);
+  await db.query(`
+    create index if not exists idx_service_lines_workspace_key
+    on service_lines(workspace_key)
+  `);
+  await db.query(`
+    create index if not exists idx_invoice_selections_workspace_key
+    on invoice_selections(workspace_key)
   `);
 }

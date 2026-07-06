@@ -9,6 +9,7 @@ import { readGoogleSheetCsvText } from './google-sheets';
 import { normalizeCompanyName } from './project-fields';
 import { getGoogleSheetSetting } from './store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../types';
+import { getCurrentWorkspaceKey } from './workspace';
 
 export interface SourceSheetViewData {
   summaries: ProjectSummary[];
@@ -16,6 +17,7 @@ export interface SourceSheetViewData {
 }
 
 export async function readSourceSheetViewData(): Promise<SourceSheetViewData> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY);
   if (!setting) {
     throw new Error('source スプレッドシート設定が未登録です。');
@@ -35,7 +37,7 @@ export async function readSourceSheetViewData(): Promise<SourceSheetViewData> {
       fallbackCompanyName: ''
     })
   }));
-  const bundle = importInvoiceCsvRows(normalizedRows);
+  const bundle = importInvoiceCsvRows(normalizedRows, { workspaceKey });
   const customerIdByProjectId = new Map(bundle.projects.map((project) => [project.id, project.customerId]));
   const serviceLineIdentities = await loadServiceLineIdentitiesForCustomers(
     bundle.projects.map((project) => project.customerId)

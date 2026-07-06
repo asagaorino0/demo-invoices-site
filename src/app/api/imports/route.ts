@@ -1,9 +1,11 @@
 import { importInvoiceCsvRows, parseInvoiceCsvText } from '../../../lib/csv/import';
+import { getCurrentWorkspaceKey } from '../../../lib/workspace';
 import { persistImportedBundle } from '../../../lib/store/projects';
 import * as XLSX from 'xlsx';
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    const workspaceKey = await getCurrentWorkspaceKey();
     const formData = await request.formData();
     const file = formData.get('file');
 
@@ -21,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
     const sourceType = detectSourceType(file);
     const text = await readImportText(file);
     const rows = parseInvoiceCsvText(text);
-    const bundle = importInvoiceCsvRows(rows);
+    const bundle = importInvoiceCsvRows(rows, { workspaceKey });
     const importId = crypto.randomUUID();
 
     const persisted = await persistImportedBundle({

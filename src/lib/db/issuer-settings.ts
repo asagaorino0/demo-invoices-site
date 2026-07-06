@@ -1,6 +1,7 @@
 import type { IssuerSetting } from '../../types';
 import { readLocalStore, writeLocalStore } from '../local-store';
 import { getDb, type DatabaseClient } from './client';
+import { getCurrentWorkspaceKey, scopeSettingKey } from '../workspace';
 
 export interface UpsertIssuerSettingInput {
   settingKey: string;
@@ -19,6 +20,7 @@ export interface UpsertIssuerSettingInput {
 let ensureTablePromise: Promise<void> | null = null;
 
 export async function getIssuerSetting(settingKey: string): Promise<IssuerSetting | null> {
+  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), settingKey);
   try {
     const db = await getDb();
     await ensureIssuerSettingsTable(db);
@@ -41,7 +43,7 @@ export async function getIssuerSetting(settingKey: string): Promise<IssuerSettin
         from issuer_settings
         where setting_key = $1
       `,
-      [settingKey]
+      [scopedSettingKey]
     );
     return result.rows[0] || null;
   } catch (error) {
@@ -50,11 +52,12 @@ export async function getIssuerSetting(settingKey: string): Promise<IssuerSettin
     }
 
     const store = await readLocalStore();
-    return store.issuerSettings.find((item) => item.settingKey === settingKey) || null;
+    return store.issuerSettings.find((item) => item.settingKey === scopedSettingKey) || null;
   }
 }
 
 export async function upsertIssuerSetting(input: UpsertIssuerSettingInput): Promise<IssuerSetting> {
+  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), input.settingKey);
   try {
     const db = await getDb();
     await ensureIssuerSettingsTable(db);
@@ -101,7 +104,7 @@ export async function upsertIssuerSetting(input: UpsertIssuerSettingInput): Prom
           updated_at as "updatedAt"
       `,
       [
-        input.settingKey,
+        scopedSettingKey,
         input.issuerName,
         input.issuerPostalCode,
         input.issuerAddress,
@@ -122,13 +125,14 @@ export async function upsertIssuerSetting(input: UpsertIssuerSettingInput): Prom
 
     const store = await readLocalStore();
     const now = new Date().toISOString();
-    const existing = store.issuerSettings.find((item) => item.settingKey === input.settingKey);
+    const existing = store.issuerSettings.find((item) => item.settingKey === scopedSettingKey);
     const nextSetting: IssuerSetting = {
       ...input,
+      settingKey: scopedSettingKey,
       createdAt: existing?.createdAt || now,
       updatedAt: now
     };
-    const nextSettings = store.issuerSettings.filter((item) => item.settingKey !== input.settingKey);
+    const nextSettings = store.issuerSettings.filter((item) => item.settingKey !== scopedSettingKey);
     await writeLocalStore({
       ...store,
       issuerSettings: [...nextSettings, nextSetting].sort((a, b) => a.settingKey.localeCompare(b.settingKey, 'ja'))

@@ -28,6 +28,7 @@ import {
   upsertProjectSql,
   upsertServiceLineSql
 } from './sql';
+import { getCurrentWorkspaceKey, scopeEntityId } from '../workspace';
 
 export interface ProjectDetailBundle {
   project: Project | null;
@@ -143,9 +144,10 @@ export interface DuplicateServiceLineInput {
 }
 
 export async function listProjectSummaries(): Promise<ProjectSummary[]> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     const db = await getDb();
-    const result = await db.query<ProjectSummary>(projectSummarySql);
+    const result = await db.query<ProjectSummary>(projectSummarySql, [workspaceKey]);
     return result.rows;
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
@@ -155,12 +157,13 @@ export async function listProjectSummaries(): Promise<ProjectSummary[]> {
 }
 
 export async function getProjectDetail(projectId: string): Promise<ProjectDetailBundle> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     const db = await getDb();
     const [projectResult, serviceLineResult, selectionResult] = await Promise.all([
-      db.query<Project>(projectDetailSql, [projectId]),
-      db.query<ServiceLine>(projectServiceLinesSql, [projectId]),
-      db.query<InvoiceSelection>(projectSelectionsSql, [projectId])
+      db.query<Project>(projectDetailSql, [workspaceKey, projectId]),
+      db.query<ServiceLine>(projectServiceLinesSql, [workspaceKey, projectId]),
+      db.query<InvoiceSelection>(projectSelectionsSql, [workspaceKey, projectId])
     ]);
 
     return {
@@ -184,6 +187,7 @@ export async function getProjectDetail(projectId: string): Promise<ProjectDetail
 }
 
 export async function persistImportedBundle(input: PersistImportInput): Promise<PersistImportResult> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const importedCustomerIds = Array.from(new Set(input.projects.map((project) => project.customerId))).filter(
     Boolean
   );
@@ -201,6 +205,7 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
     return await withTransaction(async (db) => {
       await db.query(insertImportSql, [
         input.importId,
+        workspaceKey,
         input.sourceName,
         input.sourceType,
         input.rowCount,
@@ -208,38 +213,41 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
       ]);
 
       if (replaceCompanyNames.length > 0) {
-        await deleteProjectsByCompanyNames(db, replaceCompanyNames);
+        await deleteProjectsByCompanyNames(db, workspaceKey, replaceCompanyNames);
       } else if (importedCustomerIds.length > 0) {
-        await deleteProjectsByCustomerIds(db, importedCustomerIds);
+        await deleteProjectsByCustomerIds(db, workspaceKey, importedCustomerIds);
       }
 
       for (const project of input.projects) {
         await db.query(upsertProjectSql, [
           project.id,
+          workspaceKey,
           input.importId,
           project.customerId,
           project.customerName,
-      project.subject,
-      project.defaultInvoiceDateMode,
-      project.invoiceRecipient,
-      project.facilityName,
-      project.companyName,
-      project.issueDate || '',
-      project.defaultRemarks,
-      project.issuerBoxOffsetX,
-      project.issuerBoxOffsetY,
-      project.issuerBoxWidth,
-      project.stampOffsetX,
-      project.stampOffsetY,
-      project.status,
-      project.createdAt,
-      project.updatedAt
+          project.subject,
+          project.defaultInvoiceDateMode,
+          project.invoiceRecipient,
+          project.facilityName,
+          project.companyName,
+          project.issueDate || '',
+          project.defaultRemarks,
+          project.issuerBoxOffsetX,
+          project.issuerBoxOffsetY,
+          project.issuerBoxWidth,
+          project.stampOffsetX,
+          project.stampOffsetY,
+          project.notesBoxHeight || 0,
+          project.status,
+          project.createdAt,
+          project.updatedAt
         ]);
       }
 
       for (const line of input.serviceLines) {
         await db.query(upsertServiceLineSql, [
           line.id,
+          workspaceKey,
           line.projectId,
           line.reservationId,
           line.serviceDate || '',
@@ -265,6 +273,7 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
 
       for (const selection of mergedInvoiceSelections) {
         await db.query(upsertInvoiceSelectionSql, [
+          workspaceKey,
           selection.projectId,
           selection.lineId,
           selection.selectedForInvoice,
@@ -328,6 +337,7 @@ export async function persistImportedBundle(input: PersistImportInput): Promise<
 
 async function deleteProjectsByCustomerIds(
   db: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+  workspaceKey: string,
   customerIds: string[]
 ) {
   await db.query(
@@ -336,10 +346,11 @@ async function deleteProjectsByCustomerIds(
       where project_id in (
         select id
         from projects
-        where customer_id = any($1::text[])
+        where workspace_key = $1
+          and customer_id = any($2::text[])
       )
     `,
-    [customerIds]
+    [workspaceKey, customerIds]
   );
 
   await db.query(
@@ -348,23 +359,26 @@ async function deleteProjectsByCustomerIds(
       where project_id in (
         select id
         from projects
-        where customer_id = any($1::text[])
+        where workspace_key = $1
+          and customer_id = any($2::text[])
       )
     `,
-    [customerIds]
+    [workspaceKey, customerIds]
   );
 
   await db.query(
     `
       delete from projects
-      where customer_id = any($1::text[])
+      where workspace_key = $1
+        and customer_id = any($2::text[])
     `,
-    [customerIds]
+    [workspaceKey, customerIds]
   );
 }
 
 async function deleteProjectsByCompanyNames(
   db: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+  workspaceKey: string,
   companyNames: string[]
 ) {
   await db.query(
@@ -373,10 +387,11 @@ async function deleteProjectsByCompanyNames(
       where project_id in (
         select id
         from projects
-        where company_name = any($1::text[])
+        where workspace_key = $1
+          and company_name = any($2::text[])
       )
     `,
-    [companyNames]
+    [workspaceKey, companyNames]
   );
 
   await db.query(
@@ -385,27 +400,31 @@ async function deleteProjectsByCompanyNames(
       where project_id in (
         select id
         from projects
-        where company_name = any($1::text[])
+        where workspace_key = $1
+          and company_name = any($2::text[])
       )
     `,
-    [companyNames]
+    [workspaceKey, companyNames]
   );
 
   await db.query(
     `
       delete from projects
-      where company_name = any($1::text[])
+      where workspace_key = $1
+        and company_name = any($2::text[])
     `,
-    [companyNames]
+    [workspaceKey, companyNames]
   );
 }
 
 export async function updateProjectHeader(input: UpdateProjectHeaderInput): Promise<Project | null> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const now = new Date().toISOString();
 
   try {
     const db = await getDb();
     const result = await db.query<Project>(updateProjectHeaderSql, [
+      workspaceKey,
       input.projectId,
       input.customerName,
       input.subject,
@@ -466,21 +485,23 @@ export async function replaceProjectSelections(
   selectedLineIds: string[],
   orderedLineIds?: string[]
 ): Promise<{ projectId: string; selectedCount: number }> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const now = Date.now();
 
   try {
     return await withTransaction(async (db) => {
-      const lineResult = await db.query<ServiceLine>(projectServiceLinesSql, [projectId]);
+      const lineResult = await db.query<ServiceLine>(projectServiceLinesSql, [workspaceKey, projectId]);
       const allLineIds = lineResult.rows.map((line) => line.id);
       const selectedSet = new Set(selectedLineIds);
       const orderedIds = buildOrderedLineIds(allLineIds, orderedLineIds);
 
-      await db.query(resetProjectSelectionsSql, [projectId, new Date(now).toISOString()]);
+      await db.query(resetProjectSelectionsSql, [workspaceKey, projectId, new Date(now).toISOString()]);
 
       for (const [index, lineId] of orderedIds.entries()) {
         const orderedTimestamp = new Date(now + index).toISOString();
         const line = lineResult.rows.find((item) => item.id === lineId);
         await db.query(upsertInvoiceSelectionSql, [
+          workspaceKey,
           projectId,
           lineId,
           selectedSet.has(lineId),
@@ -489,7 +510,7 @@ export async function replaceProjectSelections(
         ]);
       }
 
-      await db.query(markProjectDraftSql, [projectId, new Date(now).toISOString()]);
+      await db.query(markProjectDraftSql, [workspaceKey, projectId, new Date(now).toISOString()]);
 
       return {
         projectId,
@@ -529,6 +550,7 @@ export async function replaceProjectSelections(
 }
 
 export async function updateServiceLine(input: UpdateServiceLineInput): Promise<ServiceLine | null> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const now = new Date().toISOString();
   const collectedAt =
     input.collectionStatus === 'collected'
@@ -543,6 +565,7 @@ export async function updateServiceLine(input: UpdateServiceLineInput): Promise<
   try {
     const db = await getDb();
     const result = await db.query<ServiceLine>(updateServiceLineSql, [
+      workspaceKey,
       input.lineId,
       input.projectId,
       input.serviceDate || '',
@@ -563,7 +586,7 @@ export async function updateServiceLine(input: UpdateServiceLineInput): Promise<
     ]);
 
     if (result.rows[0]) {
-      await db.query(markProjectDraftSql, [input.projectId, now]);
+      await db.query(markProjectDraftSql, [workspaceKey, input.projectId, now]);
     }
 
     return result.rows[0] || null;
@@ -623,17 +646,19 @@ export async function createExportJob(input: {
   exportedRowCount: number;
   exportType?: 'csv_project' | 'csv_all_projects';
 }): Promise<void> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     const db = await getDb();
     await db.query(insertExportJobSql, [
       crypto.randomUUID(),
+      workspaceKey,
       input.projectId,
       input.exportType || 'csv_project',
       input.exportedRowCount,
       input.fileName,
       new Date().toISOString()
     ]);
-    await db.query(markProjectExportedSql, [input.projectId, new Date().toISOString()]);
+    await db.query(markProjectExportedSql, [workspaceKey, input.projectId, new Date().toISOString()]);
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
@@ -652,11 +677,12 @@ export async function createExportJob(input: {
 }
 
 export async function markProjectAsExported(projectId: string): Promise<void> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const now = new Date().toISOString();
 
   try {
     const db = await getDb();
-    await db.query(markProjectExportedSql, [projectId, now]);
+    await db.query(markProjectExportedSql, [workspaceKey, projectId, now]);
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
@@ -675,8 +701,9 @@ export async function markProjectAsExported(projectId: string): Promise<void> {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const now = new Date().toISOString();
-  const id = crypto.randomUUID();
+  const id = scopeEntityId(workspaceKey, crypto.randomUUID());
 
   try {
     return await withTransaction(async (db) => {
@@ -691,7 +718,9 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
                   company_name as "companyName",
                   facility_name as "facilityName"
                 from projects
-              `
+                where workspace_key = $1
+              `,
+              [workspaceKey]
             )
           ).rows,
           input.companyName,
@@ -699,6 +728,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
         );
       const result = await db.query<Project>(insertProjectSql, [
         id,
+        workspaceKey,
         customerId,
         input.customerName,
         input.subject,
@@ -864,11 +894,12 @@ function padCode(value: number, length: number): string {
 }
 
 export async function createServiceLine(input: CreateServiceLineInput): Promise<ServiceLine> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const now = new Date().toISOString();
   const reservationId = input.reservationId || `manual-${now.replace(/\D/g, '').slice(0, 14)}`;
   const project = await getProjectDetail(input.projectId);
   const customerId = project.project?.customerId || input.projectId;
-  const id = stableId('line', customerId, reservationId);
+  const id = scopeEntityId(workspaceKey, stableId('line', customerId, reservationId));
   const sortKey = input.serviceDate ? Number(input.serviceDate.replace(/-/g, '')) : 0;
   const collectedAt =
     input.collectionStatus === 'collected' ? new Date().toISOString().slice(0, 10) : '';
@@ -878,6 +909,7 @@ export async function createServiceLine(input: CreateServiceLineInput): Promise<
     const db = await getDb();
     const result = await db.query<ServiceLine>(insertServiceLineSql, [
       id,
+      workspaceKey,
       input.projectId,
       reservationId,
       input.serviceDate || '',
@@ -900,7 +932,7 @@ export async function createServiceLine(input: CreateServiceLineInput): Promise<
     ]);
 
     if (result.rows[0]) {
-      await db.query(markProjectDraftSql, [input.projectId, now]);
+      await db.query(markProjectDraftSql, [workspaceKey, input.projectId, now]);
     }
 
     return result.rows[0];
@@ -951,6 +983,7 @@ export async function loadServiceLineIdentitiesForCustomers(
 ): Promise<Array<{ customerId: string; lineId: string; reservationId: string }>> {
   if (customerIds.length === 0) return [];
 
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     const db = await getDb();
     const result = await db.query<{ customerId: string; lineId: string; reservationId: string }>(
@@ -960,10 +993,11 @@ export async function loadServiceLineIdentitiesForCustomers(
           sl.id as "lineId",
           sl.reservation_id as "reservationId"
         from service_lines sl
-        inner join projects p on p.id = sl.project_id
-        where p.customer_id = any($1::text[])
+        inner join projects p on p.id = sl.project_id and p.workspace_key = sl.workspace_key
+        where p.workspace_key = $1
+          and p.customer_id = any($2::text[])
       `,
-      [customerIds]
+      [workspaceKey, customerIds]
     );
     return result.rows;
   } catch (error) {
@@ -1011,12 +1045,13 @@ export async function duplicateServiceLine(input: DuplicateServiceLineInput): Pr
 }
 
 export async function deleteServiceLine(projectId: string, lineId: string): Promise<void> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const now = new Date().toISOString();
 
   try {
     const db = await getDb();
-    await db.query(deleteServiceLineSql, [lineId, projectId]);
-    await db.query(markProjectDraftSql, [projectId, now]);
+    await db.query(deleteServiceLineSql, [workspaceKey, lineId, projectId]);
+    await db.query(markProjectDraftSql, [workspaceKey, projectId, now]);
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
@@ -1034,12 +1069,13 @@ export async function deleteServiceLine(projectId: string, lineId: string): Prom
 }
 
 export async function clearWorkspaceProjectData(): Promise<void> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     await withTransaction(async (db) => {
-      await db.query('delete from invoice_selections');
-      await db.query('delete from service_lines');
-      await db.query('delete from projects');
-      await db.query('delete from imports');
+      await db.query('delete from invoice_selections where workspace_key = $1', [workspaceKey]);
+      await db.query('delete from service_lines where workspace_key = $1', [workspaceKey]);
+      await db.query('delete from projects where workspace_key = $1', [workspaceKey]);
+      await db.query('delete from imports where workspace_key = $1', [workspaceKey]);
     });
   } catch (error) {
     if (!shouldUseLocalStore(error)) throw error;
@@ -1054,10 +1090,12 @@ export async function clearWorkspaceProjectData(): Promise<void> {
 }
 
 export async function upsertProjectSnapshot(project: Project): Promise<Project> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     const db = await getDb();
     await db.query(upsertProjectSql, [
       project.id,
+      workspaceKey,
       project.importId,
       project.customerId,
       project.customerName,
@@ -1095,12 +1133,14 @@ export async function upsertProjectDetailSnapshot(input: {
   serviceLines: ServiceLine[];
   invoiceSelections: InvoiceSelection[];
 }): Promise<ProjectDetailBundle> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const { project, serviceLines, invoiceSelections } = input;
 
   try {
     await withTransaction(async (db) => {
       await db.query(upsertProjectSql, [
         project.id,
+        workspaceKey,
         project.importId,
         project.customerId,
         project.customerName,
@@ -1122,12 +1162,19 @@ export async function upsertProjectDetailSnapshot(input: {
         project.updatedAt
       ]);
 
-      await db.query('delete from invoice_selections where project_id = $1', [project.id]);
-      await db.query('delete from service_lines where project_id = $1', [project.id]);
+      await db.query('delete from invoice_selections where workspace_key = $1 and project_id = $2', [
+        workspaceKey,
+        project.id
+      ]);
+      await db.query('delete from service_lines where workspace_key = $1 and project_id = $2', [
+        workspaceKey,
+        project.id
+      ]);
 
       for (const line of serviceLines) {
         await db.query(upsertServiceLineSql, [
           line.id,
+          workspaceKey,
           line.projectId,
           line.reservationId,
           line.serviceDate || '',
@@ -1153,6 +1200,7 @@ export async function upsertProjectDetailSnapshot(input: {
 
       for (const selection of invoiceSelections) {
         await db.query(upsertInvoiceSelectionSql, [
+          workspaceKey,
           selection.projectId,
           selection.lineId,
           selection.selectedForInvoice,
@@ -1200,6 +1248,7 @@ function shouldUseLocalStore(error: unknown): boolean {
 export async function loadSelectionsForCustomers(customerIds: string[]): Promise<InvoiceSelection[]> {
   if (customerIds.length === 0) return [];
 
+  const workspaceKey = await getCurrentWorkspaceKey();
   try {
     const db = await getDb();
     const result = await db.query<InvoiceSelection>(
@@ -1211,10 +1260,11 @@ export async function loadSelectionsForCustomers(customerIds: string[]): Promise
           sel.selection_batch_key as "selectionBatchKey",
           sel.updated_at as "updatedAt"
         from invoice_selections sel
-        inner join projects p on p.id = sel.project_id
-        where p.customer_id = any($1::text[])
+        inner join projects p on p.id = sel.project_id and p.workspace_key = sel.workspace_key
+        where p.workspace_key = $1
+          and p.customer_id = any($2::text[])
       `,
-      [customerIds]
+      [workspaceKey, customerIds]
     );
     return result.rows;
   } catch (error) {

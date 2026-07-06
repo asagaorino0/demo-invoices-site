@@ -4,6 +4,7 @@ import { normalizeCompanyName } from './project-fields';
 import { getGoogleSheetSetting } from './store/google-sheet-settings';
 import { persistImportedBundle } from './store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../types';
+import { getCurrentWorkspaceKey } from './workspace';
 
 export interface SyncSourceSheetResult {
   importId: string;
@@ -16,6 +17,7 @@ export interface SyncSourceSheetResult {
 }
 
 export async function syncProjectsFromSourceSheet(): Promise<SyncSourceSheetResult> {
+  const workspaceKey = await getCurrentWorkspaceKey();
   const settingKey = DEFAULT_GOOGLE_SHEET_SETTING_KEY;
   const setting = await getGoogleSheetSetting(settingKey);
   if (!setting) {
@@ -36,7 +38,7 @@ export async function syncProjectsFromSourceSheet(): Promise<SyncSourceSheetResu
       fallbackCompanyName: ''
     })
   }));
-  const bundle = importInvoiceCsvRows(normalizedRows);
+  const bundle = importInvoiceCsvRows(normalizedRows, { workspaceKey });
   const warnings = bundle.warnings;
   const importId = crypto.randomUUID();
   const replaceCompanyNames = Array.from(

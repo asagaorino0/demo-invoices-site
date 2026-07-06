@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { GoogleSheetSetting, InvoiceSelection, IssuerSetting, Project, ProjectSummary, ServiceLine } from '../types';
 import { getMonthKey } from './csv/shared';
 import { normalizeCompanyName } from './project-fields';
+import { getCurrentWorkspaceKey } from './workspace';
 
 export interface LocalStoreData {
   googleSheetSettings: GoogleSheetSetting[];
@@ -17,15 +18,24 @@ const STORE_FILE = path.join(process.cwd(), '.demo-invoices-local-store.json');
 export async function readLocalStore(): Promise<LocalStoreData> {
   try {
     const raw = await readFile(STORE_FILE, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<LocalStoreData>;
+    const parsed = JSON.parse(raw) as Partial<LocalStoreData> & {
+      workspaces?: Record<string, Partial<LocalStoreData>>;
+    };
+    const workspaceKey = await getCurrentWorkspaceKey();
+    const workspaceStore =
+      parsed.workspaces && typeof parsed.workspaces === 'object'
+        ? parsed.workspaces[workspaceKey] || {}
+        : parsed;
     return {
-      googleSheetSettings: Array.isArray(parsed.googleSheetSettings)
-        ? parsed.googleSheetSettings.map(normalizeGoogleSheetSetting)
+      googleSheetSettings: Array.isArray(workspaceStore.googleSheetSettings)
+        ? workspaceStore.googleSheetSettings.map(normalizeGoogleSheetSetting)
         : [],
-      issuerSettings: Array.isArray(parsed.issuerSettings) ? parsed.issuerSettings.map(normalizeIssuerSetting) : [],
-      projects: Array.isArray(parsed.projects) ? parsed.projects.map(normalizeProject) : [],
-      serviceLines: Array.isArray(parsed.serviceLines) ? parsed.serviceLines : [],
-      invoiceSelections: Array.isArray(parsed.invoiceSelections) ? parsed.invoiceSelections : []
+      issuerSettings: Array.isArray(workspaceStore.issuerSettings)
+        ? workspaceStore.issuerSettings.map(normalizeIssuerSetting)
+        : [],
+      projects: Array.isArray(workspaceStore.projects) ? workspaceStore.projects.map(normalizeProject) : [],
+      serviceLines: Array.isArray(workspaceStore.serviceLines) ? workspaceStore.serviceLines : [],
+      invoiceSelections: Array.isArray(workspaceStore.invoiceSelections) ? workspaceStore.invoiceSelections : []
     };
   } catch {
     return {
@@ -39,7 +49,23 @@ export async function readLocalStore(): Promise<LocalStoreData> {
 }
 
 export async function writeLocalStore(data: LocalStoreData): Promise<void> {
-  await writeFile(STORE_FILE, JSON.stringify(data, null, 2), 'utf8');
+  const workspaceKey = await getCurrentWorkspaceKey();
+  let parsed: { workspaces?: Record<string, LocalStoreData> } = {};
+
+  try {
+    parsed = JSON.parse(await readFile(STORE_FILE, 'utf8')) as { workspaces?: Record<string, LocalStoreData> };
+  } catch {
+    parsed = {};
+  }
+
+  const nextPayload = {
+    workspaces: {
+      ...(parsed.workspaces || {}),
+      [workspaceKey]: data
+    }
+  };
+
+  await writeFile(STORE_FILE, JSON.stringify(nextPayload, null, 2), 'utf8');
 }
 
 export function buildProjectSummaries(data: LocalStoreData): ProjectSummary[] {
