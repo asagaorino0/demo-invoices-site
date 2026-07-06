@@ -87,7 +87,7 @@ export default function GuidePage() {
             border: '1px solid var(--line)'
           }}
         >
-{`import { buildSourceSheetAuthUrl } from '@/lib/konoyubi/build-source-sheet-auth-url';
+          {`import { buildSourceSheetAuthUrl } from '@/lib/konoyubi/build-source-sheet-auth-url';
 
 const url = buildSourceSheetAuthUrl({
   appOrigin: 'https://demo-invoices.example.com',
