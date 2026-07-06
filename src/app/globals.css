@@ -1021,12 +1021,16 @@ a {
 }
 
 .invoice-table tbody tr,
-.invoice-table tfoot tr {
+.invoice-totals-table tbody tr {
   height: 38px;
 }
 
 .invoice-table .num {
   text-align: right;
+}
+
+.invoice-totals-table {
+  margin-top: -1px;
 }
 
 .invoice-notes {
@@ -1082,8 +1086,8 @@ a {
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   .invoice-doc-header {
@@ -1097,11 +1101,24 @@ a {
     border: 0;
   }
 
-  .invoice-table,
-  .invoice-table thead,
-  .invoice-table tbody,
-  .invoice-table tfoot,
-  .invoice-table tr,
+  .invoice-table {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .invoice-table thead {
+    display: table-header-group;
+  }
+
+  .invoice-table tbody {
+    display: table-row-group;
+  }
+
+  .invoice-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .invoice-notes,
   .invoice-footer {
     break-inside: avoid;

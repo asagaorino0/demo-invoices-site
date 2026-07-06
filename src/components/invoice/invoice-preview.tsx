@@ -368,7 +368,10 @@ export function InvoicePreview({
               </tr>
             ))}
           </tbody>
-          <tfoot>
+        </table>
+
+        <table className="invoice-table invoice-totals-table">
+          <tbody>
             <tr>
               <td colSpan={3}>小計</td>
               <td className="num">{formatPlainCurrency(totals.subtotal)}</td>
@@ -385,7 +388,7 @@ export function InvoicePreview({
                 <strong>{formatPlainCurrency(totals.total)}</strong>
               </td>
             </tr>
-          </tfoot>
+          </tbody>
         </table>
 
         {remarksText ? (
