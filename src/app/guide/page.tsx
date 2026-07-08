@@ -9,7 +9,7 @@ export default function GuidePage() {
   return (
     <main className="page-shell">
       <section className="hero">
-        <p className="eyebrow">konoyubi Invoices</p>
+        {/* <p className="eyebrow">konoyubi Invoices</p> */}
         <h1 className="page-title-static">konoyubi Invoices</h1>
         <p>
           Google スプレッドシートを取り込んで、案件単位で編集する請求書ワークベンチです。
