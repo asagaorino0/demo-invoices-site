@@ -1,14 +1,19 @@
 import Link from 'next/link';
 
+export const metadata = {
+  title: 'konoyubi Invoices',
+  description: 'konoyubi Invoices の案内ページ'
+};
+
 export default function GuidePage() {
   return (
     <main className="page-shell">
       <section className="hero">
-        <p className="eyebrow">Invoice Workbench</p>
-        <h1 className="page-title-static">Google スプレッドシートを取り込んで、案件単位で編集する</h1>
+        <p className="eyebrow">konoyubi Invoices</p>
+        <h1 className="page-title-static">konoyubi Invoices</h1>
         <p>
-          このページは開発・確認用の案内です。日常の作業は案件ワークベンチから始める想定にして、
-          利用者向けの入口は別にしています。
+          Google スプレッドシートを取り込んで、案件単位で編集する請求書ワークベンチです。
+          このページは開発・確認用の案内として、Google OAuth のホームページにも利用しています。
         </p>
 
         <div className="hero-actions">
