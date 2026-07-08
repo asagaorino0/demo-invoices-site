@@ -20,7 +20,7 @@ export interface UpsertGoogleSheetSettingInput {
 let ensureTablePromise: Promise<void> | null = null;
 
 export async function getGoogleSheetSetting(settingKey: string): Promise<GoogleSheetSetting | null> {
-  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), settingKey);
+  const scopedSettingKey = await resolveScopedGoogleSheetSettingKey(settingKey);
   try {
     const db = await getDb();
     await ensureGoogleSheetSettingsTable(db);
@@ -93,7 +93,7 @@ export async function listGoogleSheetSettings(): Promise<GoogleSheetSetting[]> {
 export async function upsertGoogleSheetSetting(
   input: UpsertGoogleSheetSettingInput
 ): Promise<GoogleSheetSetting> {
-  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), input.settingKey);
+  const scopedSettingKey = await resolveScopedGoogleSheetSettingKey(input.settingKey);
   try {
     const db = await getDb();
     await ensureGoogleSheetSettingsTable(db);
@@ -156,7 +156,7 @@ export async function upsertGoogleSheetSetting(
 }
 
 export async function deleteGoogleSheetSetting(settingKey: string): Promise<void> {
-  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), settingKey);
+  const scopedSettingKey = await resolveScopedGoogleSheetSettingKey(settingKey);
   try {
     const db = await getDb();
     await ensureGoogleSheetSettingsTable(db);
@@ -182,6 +182,18 @@ export async function deleteGoogleSheetSetting(settingKey: string): Promise<void
       googleSheetSettings: store.googleSheetSettings.filter((item) => item.settingKey !== scopedSettingKey)
     });
   }
+}
+
+async function resolveScopedGoogleSheetSettingKey(settingKey: string): Promise<string> {
+  const workspaceKey = await getCurrentWorkspaceKey();
+  const workspacePrefix = scopeSettingPrefix(workspaceKey);
+  const normalizedSettingKey = String(settingKey || '').trim();
+
+  if (normalizedSettingKey.startsWith(workspacePrefix)) {
+    return normalizedSettingKey;
+  }
+
+  return scopeSettingKey(workspaceKey, normalizedSettingKey);
 }
 
 async function ensureGoogleSheetSettingsTable(db: DatabaseClient): Promise<void> {
