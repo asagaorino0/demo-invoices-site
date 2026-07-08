@@ -72,6 +72,9 @@ export function ImportPanel({
   const spreadsheetHref = setting?.spreadsheetId
     ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(setting.spreadsheetId)}/edit`
     : null;
+  const shouldShowCurrentSpreadsheet = Boolean(
+    setting && spreadsheetHref && initialSpreadsheetTitle && initialSpreadsheetTitle !== '名称未取得'
+  );
 
   useEffect(() => {
     if (pathname !== '/source-sheet') {
@@ -84,6 +87,16 @@ export function ImportPanel({
 
     router.replace('/projects');
   }, [initialGoogleSheetStatus, pathname, router, setting]);
+
+  useEffect(() => {
+    setSetting(initialSetting);
+    setForm((current) => ({
+      ...current,
+      spreadsheetUrlOrId: initialSetting?.spreadsheetId || '',
+      sheetName: initialSetting?.sheetName || 'invoices',
+      historySheetName: initialSetting?.historySheetName || 'history'
+    }));
+  }, [initialSetting]);
 
   async function saveSetting() {
     setMessage('');
@@ -205,7 +218,7 @@ export function ImportPanel({
       )}
       <p>この画面で利用する共通の source スプレッドシートを設定します。</p>
 
-      {setting && !(withinDialog && mode === 'existing') ? (
+      {shouldShowCurrentSpreadsheet && !(withinDialog && mode === 'existing') ? (
         <div className="note" style={{ marginTop: 16, marginBottom: 0 }}>
           現在のスプレッドシート:
           {' '}

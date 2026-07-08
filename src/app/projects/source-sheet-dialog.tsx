@@ -63,6 +63,8 @@ export function SourceSheetDialog({
     ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(setting.spreadsheetId)}/edit`
     : null;
   const spreadsheetLabel = spreadsheetTitle || '現在のスプレッドシートを開く';
+  const shouldShowCurrentSpreadsheet = Boolean(spreadsheetHref && spreadsheetTitle && spreadsheetTitle !== '名称未取得');
+  const visibleSpreadsheetHref = shouldShowCurrentSpreadsheet ? spreadsheetHref : null;
 
   useEffect(() => {
     if (!open) {
@@ -95,6 +97,14 @@ export function SourceSheetDialog({
     setOpen(true);
     setView('issuer');
   }, [shouldOpenIssuerDialog]);
+
+  useEffect(() => {
+    setSetting(initialSetting);
+  }, [initialSetting]);
+
+  useEffect(() => {
+    setSpreadsheetTitle(initialSpreadsheetTitle || null);
+  }, [initialSpreadsheetTitle]);
 
   async function clearSetting() {
     if (!setting) {
@@ -187,7 +197,7 @@ export function SourceSheetDialog({
                   </button>
                 </div>
 
-                {spreadsheetHref ? (
+                {shouldShowCurrentSpreadsheet ? (
                   <div
                     className="note"
                     style={{
@@ -202,7 +212,7 @@ export function SourceSheetDialog({
                       現在のスプレッドシート:
                       {' '}
                       <a
-                        href={spreadsheetHref}
+                        href={visibleSpreadsheetHref || undefined}
                         target="_blank"
                         rel="noreferrer"
                         style={{
@@ -244,7 +254,7 @@ export function SourceSheetDialog({
                 </div>
                 <ImportPanel
                   initialSetting={setting}
-                  initialSpreadsheetTitle={spreadsheetTitle}
+                  initialSpreadsheetTitle={spreadsheetTitle || undefined}
                   withinDialog
                   initialMode={null}
                 />
