@@ -5,7 +5,7 @@ export default function GuidePage() {
     <main className="page-shell">
       <section className="hero">
         <p className="eyebrow">Invoice Workbench</p>
-        <h1>Google スプレッドシートを取り込んで、案件単位で編集する</h1>
+        <h1 className="page-title-static">Google スプレッドシートを取り込んで、案件単位で編集する</h1>
         <p>
           このページは開発・確認用の案内です。日常の作業は案件ワークベンチから始める想定にして、
           利用者向けの入口は別にしています。
