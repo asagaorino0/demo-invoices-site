@@ -135,6 +135,30 @@ export async function upsertGoogleSheetSettingToFirestore(
   return nextSetting;
 }
 
+export async function deleteGoogleSheetSettingFromFirestore(settingKey: string): Promise<void> {
+  const config = getFirestoreConfig();
+  if (!config) {
+    throw new Error('Firestore config is not available.');
+  }
+
+  const accessToken = await fetchGoogleAccessToken(config.clientEmail, config.privateKey, FIRESTORE_SCOPE);
+  const response = await fetch(buildDocumentUrl(config.projectId, settingKey), {
+    method: 'DELETE',
+    headers: {
+      authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (response.status === 404) {
+    return;
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Firestore からスプレッドシート設定を削除できませんでした: ${text}`);
+  }
+}
+
 function parseGoogleSheetSetting(document: FirestoreDocument, fallbackSettingKey: string): GoogleSheetSetting | null {
   const fields = document.fields || {};
   const settingKey = readString(fields.settingKey) || fallbackSettingKey;

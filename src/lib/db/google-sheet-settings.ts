@@ -1,5 +1,6 @@
 import type { GoogleSheetSetting } from '../../types';
 import {
+  deleteGoogleSheetSettingFromFirestore,
   getGoogleSheetSettingFromFirestore,
   listGoogleSheetSettingsFromFirestore,
   upsertGoogleSheetSettingToFirestore
@@ -151,6 +152,35 @@ export async function upsertGoogleSheetSetting(
       googleSheetSettings: [...nextSettings, nextSetting].sort((a, b) => a.settingKey.localeCompare(b.settingKey, 'ja'))
     });
     return nextSetting;
+  }
+}
+
+export async function deleteGoogleSheetSetting(settingKey: string): Promise<void> {
+  const scopedSettingKey = scopeSettingKey(await getCurrentWorkspaceKey(), settingKey);
+  try {
+    const db = await getDb();
+    await ensureGoogleSheetSettingsTable(db);
+    await db.query(
+      `
+        delete from google_sheet_settings
+        where customer_id = $1
+      `,
+      [scopedSettingKey]
+    );
+    return;
+  } catch (error) {
+    if (!shouldFallbackToFirestoreOrLocal(error)) throw error;
+    try {
+      await deleteGoogleSheetSettingFromFirestore(scopedSettingKey);
+      return;
+    } catch (firestoreError) {
+      if (!shouldUseLocalStore(firestoreError)) throw firestoreError;
+    }
+    const store = await readLocalStore();
+    await writeLocalStore({
+      ...store,
+      googleSheetSettings: store.googleSheetSettings.filter((item) => item.settingKey !== scopedSettingKey)
+    });
   }
 }
 

@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     const payload = JSON.parse(payloadCookie) as {
       settingKey?: string;
       spreadsheetTitle?: string;
-      newFolderName?: string;
+      // newFolderName?: string;
       sheetName?: string;
       historySheetName?: string;
       returnPath?: string;
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     const created = await createGoogleSheetTargetWithUserAccessToken({
       accessToken: tokens.accessToken,
       title: String(payload.spreadsheetTitle || ''),
-      newFolderName: String(payload.newFolderName || ''),
+      // newFolderName: String(payload.newFolderName || ''),
       sheetName: String(payload.sheetName || ''),
       historySheetName: String(payload.historySheetName || ''),
       issuerValues: payload.issuerValues

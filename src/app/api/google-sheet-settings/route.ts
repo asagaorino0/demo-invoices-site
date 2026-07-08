@@ -1,5 +1,9 @@
 import { getGoogleSheetsErrorStatus, verifyGoogleSheetTarget } from '../../../lib/google-sheets';
-import { getGoogleSheetSetting, upsertGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
+import {
+  deleteGoogleSheetSetting,
+  getGoogleSheetSetting,
+  upsertGoogleSheetSetting
+} from '../../../lib/store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../types';
 import { loadBaseSiteConfig } from '../../../lib/site-config';
 import { resolveTenantIdFromGoogleSheetTarget } from '../../../lib/tenant';
@@ -83,6 +87,31 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(
       {
         error: 'failed_to_save_google_sheet_setting',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status }
+    );
+  }
+}
+
+export async function DELETE(request: Request): Promise<Response> {
+  try {
+    const body = (await request.json().catch(() => ({}))) as {
+      settingKey?: string;
+    };
+
+    const settingKey = String(body.settingKey || '').trim() || DEFAULT_GOOGLE_SHEET_SETTING_KEY;
+    await deleteGoogleSheetSetting(settingKey);
+
+    return Response.json({
+      ok: true,
+      message: 'スプレッドシート設定をクリアしました。'
+    });
+  } catch (error) {
+    const status = getGoogleSheetsErrorStatus(error) || 500;
+    return Response.json(
+      {
+        error: 'failed_to_delete_google_sheet_setting',
         message: error instanceof Error ? error.message : 'Unknown error'
       },
       { status }

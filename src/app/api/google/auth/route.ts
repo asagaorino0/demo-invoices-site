@@ -75,11 +75,21 @@ export async function GET(request: NextRequest) {
       return redirectToProjects(request, 'error', 'シート名を入力してください。');
     }
 
-    if (String(request.nextUrl.searchParams.get('destinationFolderUrlOrId') || '').trim()) {
+    // if (String(request.nextUrl.searchParams.get('destinationFolderUrlOrId') || '').trim()) {
+    //   return redirectToProjects(
+    //     request,
+    //     'error',
+    //     '公開版では既存の Drive フォルダ指定は使えません。保存先を分けたい場合は新規フォルダ名を入力してください。'
+    //   );
+    // }
+    if (
+      String(request.nextUrl.searchParams.get('destinationFolderUrlOrId') || '').trim() ||
+      String(request.nextUrl.searchParams.get('newFolderName') || '').trim()
+    ) {
       return redirectToProjects(
         request,
         'error',
-        '公開版では既存の Drive フォルダ指定は使えません。保存先を分けたい場合は新規フォルダ名を入力してください。'
+        '公開版では保存先の Drive フォルダ指定は使えません。スプレッドシートはマイドライブ直下へ作成されます。'
       );
     }
 
@@ -94,7 +104,7 @@ export async function GET(request: NextRequest) {
       origin: request.nextUrl.origin,
       spreadsheetTitle,
       settingKey,
-      newFolderName,
+      // newFolderName,
       sheetName,
       historySheetName,
       returnPath,
@@ -113,7 +123,7 @@ export async function GET(request: NextRequest) {
       JSON.stringify({
         spreadsheetTitle,
         settingKey,
-        newFolderName,
+        // newFolderName,
         sheetName,
         historySheetName,
         returnPath,

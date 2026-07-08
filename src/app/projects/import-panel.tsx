@@ -6,6 +6,7 @@ import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, type GoogleSheetSetting } from '../..
 import type { KonoyubiIssuerSeed } from '../../lib/konoyubi/build-source-sheet-auth-url';
 
 type SourceSheetMode = 'existing' | 'create';
+const ENABLE_NEW_FOLDER_NAME_FIELD = false;
 
 interface SaveSettingResult {
   message?: string;
@@ -178,10 +179,13 @@ export function ImportPanel({
     const params = new URLSearchParams({
       settingKey,
       spreadsheetTitle: form.spreadsheetTitle,
-      newFolderName: form.newFolderName,
+      // newFolderName: form.newFolderName,
       sheetName: form.sheetName,
       historySheetName: form.historySheetName
     });
+    if (ENABLE_NEW_FOLDER_NAME_FIELD && form.newFolderName.trim()) {
+      params.set('newFolderName', form.newFolderName);
+    }
     appendIssuerValues(params, issuerValues);
     if (oauthReturnPath) {
       params.set('returnPath', oauthReturnPath);
@@ -267,19 +271,21 @@ export function ImportPanel({
                   disabled={savePending}
                   style={inputStyle}
                 />
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ display: 'block', fontSize: 12, color: '#666' }}>保存先の新規フォルダ名</label>
-                  <input
-                    placeholder="例: 2026年請求書"
-                    value={form.newFolderName}
-                    onChange={(e) => setForm((current) => ({ ...current, newFolderName: e.target.value }))}
-                    disabled={savePending}
-                    style={inputStyle}
-                  />
-                  <p className="source-meta" style={{ margin: 0 }}>
-                    公開版では `drive.file` 権限に寄せるため、既存フォルダの指定はせず、このアプリが新規作成したフォルダだけを保存先にできます。未入力ならマイドライブ直下へ作成します。
-                  </p>
-                </div>
+                {ENABLE_NEW_FOLDER_NAME_FIELD ? (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <label style={{ display: 'block', fontSize: 12, color: '#666' }}>保存先の新規フォルダ名</label>
+                    <input
+                      placeholder="例: 2026年請求書"
+                      value={form.newFolderName}
+                      onChange={(e) => setForm((current) => ({ ...current, newFolderName: e.target.value }))}
+                      disabled={savePending}
+                      style={inputStyle}
+                    />
+                    <p className="source-meta" style={{ margin: 0 }}>
+                      いまは非表示にしていますが、必要になればこの入力欄を再度有効にできます。
+                    </p>
+                  </div>
+                ) : null}
               </>
             ) : (
               <div style={{ display: 'grid', gap: 6 }}>
@@ -346,7 +352,7 @@ export function ImportPanel({
       ) : null}
 
       <div className="source-meta" style={{ marginTop: 8 }}>
-        新規作成では Google 認証画面へ移動し、あなたの Drive に source / history / 発行者 シートを作成したあとサービスアカウントへ編集権限を付与します。公開審査を通しやすくするため、保存先フォルダはこのアプリが新規作成するものだけに限定しています。
+        新規作成では Google 認証画面へ移動し、あなたの Drive のマイドライブ直下に source / history / 発行者 シートを作成したあとサービスアカウントへ編集権限を付与します。
       </div>
       {!setting ? (
         <div className="source-meta" style={{ marginTop: 12 }}>
