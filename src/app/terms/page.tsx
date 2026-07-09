@@ -1,8 +1,8 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: '利用規約 | demo-invoices workbench',
-  description: 'demo-invoices workbench の利用規約'
+  title: '利用規約 | konoyubi Invoices',
+  description: 'konoyubi Invoices の利用規約'
 };
 
 export default function TermsPage() {
@@ -12,11 +12,14 @@ export default function TermsPage() {
         <p className="eyebrow">Terms Of Service</p>
         <h1 className="page-title-static">利用規約</h1>
         <p>
-          demo-invoices workbench の利用にあたっては、以下の条件に同意したものとみなします。
+          konoyubi Invoices の利用にあたっては、以下の条件に同意したものとみなします。
         </p>
         <div className="hero-actions">
           <Link className="button-link primary" href="/guide">
             サービス案内へ戻る
+          </Link>
+          <Link className="button-link secondary" href="/privacy">
+            プライバシーポリシー
           </Link>
           <Link className="button-link secondary" href="/projects">
             ワークベンチを開く
@@ -70,6 +73,9 @@ export default function TermsPage() {
 
         <p className="source-meta" style={{ marginTop: 24 }}>
           最終更新日: 2026年7月6日
+        </p>
+        <p className="source-meta">
+          お問い合わせ: <a href="mailto:asagaorino@gmail.com">asagaorino@gmail.com</a>
         </p>
       </section>
     </main>

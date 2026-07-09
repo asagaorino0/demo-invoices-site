@@ -1,8 +1,8 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'プライバシーポリシー | demo-invoices workbench',
-  description: 'demo-invoices workbench のプライバシーポリシー'
+  title: 'プライバシーポリシー | konoyubi Invoices',
+  description: 'konoyubi Invoices のプライバシーポリシー'
 };
 
 export default function PrivacyPage() {
@@ -12,12 +12,15 @@ export default function PrivacyPage() {
         <p className="eyebrow">Privacy Policy</p>
         <h1 className="page-title-static">プライバシーポリシー</h1>
         <p>
-          demo-invoices workbench は、請求書作成や Google スプレッドシート連携に必要な範囲でのみ
+          konoyubi Invoices は、請求書作成や Google スプレッドシート連携に必要な範囲でのみ
           利用者情報と Google API のアクセス権を取り扱います。
         </p>
         <div className="hero-actions">
           <Link className="button-link primary" href="/guide">
             サービス案内へ戻る
+          </Link>
+          <Link className="button-link secondary" href="/terms">
+            利用規約
           </Link>
           <Link className="button-link secondary" href="/projects">
             ワークベンチを開く
@@ -75,6 +78,9 @@ export default function PrivacyPage() {
 
         <p className="source-meta" style={{ marginTop: 24 }}>
           最終更新日: 2026年7月6日
+        </p>
+        <p className="source-meta">
+          お問い合わせ: <a href="mailto:asagaorino@gmail.com">asagaorino@gmail.com</a>
         </p>
       </section>
     </main>

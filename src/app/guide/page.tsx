@@ -15,6 +15,17 @@ export default function GuidePage() {
           Google スプレッドシートを取り込んで、案件単位で編集する請求書ワークベンチです。
           このページは開発・確認用の案内として、Google OAuth のホームページにも利用しています。
         </p>
+        <p>
+          公開情報:
+          {' '}
+          <Link href="/privacy">プライバシーポリシー</Link>
+          {' / '}
+          <Link href="/terms">利用規約</Link>
+          {' / '}
+          お問い合わせ:
+          {' '}
+          <a href="mailto:asagaorino@gmail.com">asagaorino@gmail.com</a>
+        </p>
 
         <div className="hero-actions">
           <Link className="button-link primary" href="/projects">
@@ -22,6 +33,12 @@ export default function GuidePage() {
           </Link>
           <Link className="button-link secondary" href="/api/projects">
             API を確認する
+          </Link>
+          <Link className="button-link secondary" href="/privacy">
+            プライバシーポリシー
+          </Link>
+          <Link className="button-link secondary" href="/terms">
+            利用規約
           </Link>
         </div>
       </section>
