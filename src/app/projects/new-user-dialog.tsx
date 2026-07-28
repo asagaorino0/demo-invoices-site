@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+// import { CreateDealPanel } from './create-deal-panel';
 import { CreateProjectPanel } from './create-project-panel';
 
 export function NewUserDialog() {
@@ -52,8 +53,8 @@ export function NewUserDialog() {
                 ×
               </button>
             </div>
-
-            <CreateProjectPanel withinDialog onCreated={() => setOpen(false)} />
+            <CreateProjectPanel withinDialog onCreated={() => setOpen(false)} onCancel={() => setOpen(false)} />
+            {/* <CreateDealPanel withinDialog onCreated={() => setOpen(false)} /> */}
           </div>
         </div>
       ) : null}
