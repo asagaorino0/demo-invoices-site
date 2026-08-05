@@ -13,6 +13,7 @@ import {
 import { InvoicePreview } from '../../../components/invoice/invoice-preview';
 import type { SiteConfig } from '../../../types';
 import {
+  buildRemarksText,
   getInvoiceIssueDate,
   getReceiptIssueDate
 } from '../../../lib/invoice/preview';
@@ -722,6 +723,8 @@ export function ProjectEditor({
       })),
     [receiptDate, receiptLines]
   );
+  const hasInvoiceRemarks = Boolean(buildRemarksText(previewProject, invoiceLines));
+  const hasReceiptRemarks = Boolean(buildRemarksText(previewProject, previewReceiptLines));
   const monthGroups = useMemo(() => {
     const map = new Map<string, ServiceLine[]>();
     uncollectedLines.forEach((line) => {
@@ -2650,26 +2653,28 @@ export function ProjectEditor({
                           }
                         />
                       </div>
-                      <div className="invoice-preview-position-tools" style={{ marginTop: 18 }}>
-                        <span className="invoice-preview-subject-label">備考欄の高さ</span>
-                        <div className="invoice-preview-position-actions">
-                          <button
-                            className="button-link secondary"
-                            type="button"
-                            onClick={() =>
-                              setForm((current) => ({
-                                ...current,
-                                notesBoxHeight: 0
-                              }))
-                            }
-                          >
-                            高さをリセット
-                          </button>
+                      {hasInvoiceRemarks ? (
+                        <div className="invoice-preview-position-tools" style={{ marginTop: 18 }}>
+                          <span className="invoice-preview-subject-label">備考欄の高さ</span>
+                          <div className="invoice-preview-position-actions">
+                            <button
+                              className="button-link secondary"
+                              type="button"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  notesBoxHeight: 0
+                                }))
+                              }
+                            >
+                              高さをリセット
+                            </button>
+                          </div>
+                          <span className="invoice-preview-subject-help">
+                            備考欄の右下をドラッグすると高さを調整できます。未設定時は内容に合わせて表示されます。
+                          </span>
                         </div>
-                        <span className="invoice-preview-subject-help">
-                          備考欄の右下をドラッグすると高さを調整できます。未設定時は内容に合わせて表示されます。
-                        </span>
-                      </div>
+                      ) : null}
                     </>
                   )}
                 </section>
@@ -2717,26 +2722,28 @@ export function ProjectEditor({
                             </span>
                           </label>
                         </div>
-                        <div className="invoice-preview-position-tools">
-                          <span className="invoice-preview-subject-label">備考欄の高さ</span>
-                          <div className="invoice-preview-position-actions">
-                            <button
-                              className="button-link secondary"
-                              type="button"
-                              onClick={() =>
-                                setForm((current) => ({
-                                  ...current,
-                                  notesBoxHeight: 0
-                                }))
-                              }
-                            >
-                              高さをリセット
-                            </button>
+                        {hasReceiptRemarks ? (
+                          <div className="invoice-preview-position-tools">
+                            <span className="invoice-preview-subject-label">備考欄の高さ</span>
+                            <div className="invoice-preview-position-actions">
+                              <button
+                                className="button-link secondary"
+                                type="button"
+                                onClick={() =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    notesBoxHeight: 0
+                                  }))
+                                }
+                              >
+                                高さをリセット
+                              </button>
+                            </div>
+                            <span className="invoice-preview-subject-help">
+                              備考欄の右下をドラッグすると高さを調整できます。未設定時は内容に合わせて表示されます。
+                            </span>
                           </div>
-                          <span className="invoice-preview-subject-help">
-                            備考欄の右下をドラッグすると高さを調整できます。未設定時は内容に合わせて表示されます。
-                          </span>
-                        </div>
+                        ) : null}
                       </div>
                       <div ref={receiptPrintRef}>
                         <InvoicePreview

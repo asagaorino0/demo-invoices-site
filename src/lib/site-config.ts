@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { DEFAULT_ISSUER_SETTING_KEY, type SiteConfig } from '../types';
 import { readGoogleSheetValues } from './google-sheets';
 import { getGoogleSheetSetting } from './store/google-sheet-settings';
@@ -214,9 +215,9 @@ export async function loadIssuerSheetOverrides(sheetName: string): Promise<Parti
   );
 }
 
-export async function loadIssuerSheetOverridesWithStatus(
+export const loadIssuerSheetOverridesWithStatus = cache(async (
   sheetName: string
-): Promise<{ values: Partial<SiteConfig> | null; failed: boolean }> {
+): Promise<{ values: Partial<SiteConfig> | null; failed: boolean }> => {
   const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY);
   if (!setting?.spreadsheetId) {
     return { values: null, failed: false };
@@ -241,12 +242,12 @@ export async function loadIssuerSheetOverridesWithStatus(
     console.warn('[site-config] failed to load issuer sheet', error);
     return { values: null, failed: true };
   }
-}
+});
 
-export async function loadIssuerSheetOverridesFromTarget(
+export const loadIssuerSheetOverridesFromTarget = cache(async (
   target: GoogleSheetTarget,
   sheetName: string
-): Promise<Partial<SiteConfig> | null> {
+): Promise<Partial<SiteConfig> | null> => {
   const normalizedSheetName = String(sheetName || '').trim();
   if (!normalizedSheetName) {
     return null;
@@ -263,7 +264,7 @@ export async function loadIssuerSheetOverridesFromTarget(
     console.warn('[site-config] failed to load issuer sheet', error);
     return null;
   }
-}
+});
 
 export function parseIssuerSheetValues(values: string[][]): Partial<SiteConfig> | null {
   const firstDataRowIndex = values.findIndex((row) => row.some((cell) => String(cell || '').trim()));

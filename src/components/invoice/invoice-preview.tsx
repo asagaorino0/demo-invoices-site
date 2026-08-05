@@ -4,6 +4,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useRef, useState } from 'react';
 import type { Project, ServiceLine, SiteConfig } from '../../types';
 import {
+  buildRemarksText,
   buildDocumentRows,
   calcTotals,
   formatDocumentNumberForDisplay,
@@ -104,14 +105,7 @@ export function InvoicePreview({
   const [isResizingIssuerWidth, setIsResizingIssuerWidth] = useState(false);
   const [isDraggingStamp, setIsDraggingStamp] = useState(false);
   const [isResizingNotesBox, setIsResizingNotesBox] = useState(false);
-  const remarksText = [
-    project.defaultRemarks,
-    ...lines.map((line) => line.remarks)
-  ]
-    .map((text) => String(text || '').trim())
-    .filter(Boolean)
-    .filter((text, index, array) => array.indexOf(text) === index)
-    .join('\n');
+  const remarksText = buildRemarksText(project, lines);
   const issuerName = String(config.issuerName || '').trim();
   const issuerPostalCode = String(config.issuerPostalCode || '').trim();
   const issuerAddress = String(config.issuerAddress || '').trim();

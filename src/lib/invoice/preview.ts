@@ -88,6 +88,20 @@ export function buildDocumentRows(lines: ServiceLine[]): InvoicePreviewRow[] {
   return rows;
 }
 
+export function buildRemarksText(
+  project: Pick<Project, 'defaultRemarks'>,
+  lines: Pick<ServiceLine, 'remarks'>[]
+): string {
+  return [
+    project.defaultRemarks,
+    ...lines.map((line) => line.remarks)
+  ]
+    .map((text) => String(text || '').trim())
+    .filter(Boolean)
+    .filter((text, index, array) => array.indexOf(text) === index)
+    .join('\n');
+}
+
 export function getInvoiceLines(lines: ServiceLine[], selectedLineIds: string[]): ServiceLine[] {
   const lineMap = new Map(
     lines
