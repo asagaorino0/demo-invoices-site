@@ -214,6 +214,35 @@ export async function loadIssuerSheetOverrides(sheetName: string): Promise<Parti
   );
 }
 
+export async function loadIssuerSheetOverridesWithStatus(
+  sheetName: string
+): Promise<{ values: Partial<SiteConfig> | null; failed: boolean }> {
+  const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY);
+  if (!setting?.spreadsheetId) {
+    return { values: null, failed: false };
+  }
+
+  const normalizedSheetName = String(sheetName || '').trim();
+  if (!normalizedSheetName) {
+    return { values: null, failed: false };
+  }
+
+  try {
+    const result = await readGoogleSheetValues({
+      spreadsheetId: setting.spreadsheetId,
+      sheetName: normalizedSheetName,
+      historySheetName: setting.historySheetName
+    });
+    return {
+      values: parseIssuerSheetValues(result.values),
+      failed: false
+    };
+  } catch (error) {
+    console.warn('[site-config] failed to load issuer sheet', error);
+    return { values: null, failed: true };
+  }
+}
+
 export async function loadIssuerSheetOverridesFromTarget(
   target: GoogleSheetTarget,
   sheetName: string

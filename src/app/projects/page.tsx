@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { listProjectSummaries, getProjectDetail, upsertProjectDetailSnapshot } from '../../lib/store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, getProjectStatusLabel, type ProjectSummary } from '../../types';
 import { ProjectEditor } from './[projectId]/project-editor';
-import { loadBaseSiteConfig, loadIssuerSheetOverrides, loadSiteConfig } from '../../lib/site-config';
+import { loadBaseSiteConfig, loadIssuerSheetOverridesWithStatus, loadSiteConfig } from '../../lib/site-config';
 import { getGoogleSheetSetting } from '../../lib/store/google-sheet-settings';
 import { getIssuerSetting } from '../../lib/store/issuer-settings';
 import { SourceSheetDialog } from './source-sheet-dialog';
@@ -78,12 +78,20 @@ export default async function ProjectsPage({
     : '';
   const initialIssuerSetting = await getIssuerSetting(DEFAULT_ISSUER_SETTING_KEY).catch(() => null);
   const baseSiteConfig = await loadBaseSiteConfig().catch(() => null);
-  const issuerSheetValues = hydratedGoogleSheetSetting && baseSiteConfig
-    ? await loadIssuerSheetOverrides(baseSiteConfig.issuerSheetName).catch(() => null)
-    : null;
+  const issuerSheetState = hydratedGoogleSheetSetting && baseSiteConfig
+    ? await loadIssuerSheetOverridesWithStatus(baseSiteConfig.issuerSheetName).catch(() => ({
+      values: null,
+      failed: true
+    }))
+    : { values: null, failed: false };
+  const issuerSheetValues = issuerSheetState.values;
   const initialIssuerValues = issuerSheetValues ? normalizeIssuerValues(issuerSheetValues) : null;
-  const dialogIssuerSetting = hydratedGoogleSheetSetting ? null : initialIssuerSetting;
-  const shouldOpenIssuerDialog = Boolean(hydratedGoogleSheetSetting) && !hasIssuerValues(issuerSheetValues);
+  const dialogIssuerSetting = initialIssuerSetting;
+  const shouldOpenIssuerDialog =
+    Boolean(hydratedGoogleSheetSetting) &&
+    !issuerSheetState.failed &&
+    !hasIssuerValues(issuerSheetValues) &&
+    !hasIssuerValues(initialIssuerSetting);
   const hasSourceSpreadsheetSetting = Boolean(hydratedGoogleSheetSetting);
   const visibleProjects = hasSourceSpreadsheetSetting ? projects : [];
   const customerGroups = buildCustomerGroups(visibleProjects);
