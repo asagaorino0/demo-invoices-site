@@ -303,6 +303,7 @@ function buildLineFormValue(line: ServiceLine | null) {
   return line
     ? {
       id: line.id,
+      reservationId: line.reservationId,
       serviceDate: line.serviceDate || '',
       serviceName: line.serviceName,
       staffName: line.staffName,
@@ -328,6 +329,7 @@ function areLineFormsEqual(
   if (!left || !right) return left === right;
   return (
     left.id === right.id &&
+    left.reservationId === right.reservationId &&
     left.serviceDate === right.serviceDate &&
     left.serviceName === right.serviceName &&
     left.staffName === right.staffName &&
@@ -1156,6 +1158,7 @@ export function ProjectEditor({
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
+            reservationId: line.reservationId,
             serviceDate: line.serviceDate || null,
             serviceName: line.serviceName,
             staffName: line.staffName,
@@ -1252,6 +1255,7 @@ export function ProjectEditor({
     }
 
     const payload = {
+      reservationId: editingLine?.reservationId || lineForm.reservationId || '',
       serviceDate: lineForm.serviceDate || null,
       serviceName: lineForm.serviceName,
       staffName: lineForm.staffName,
@@ -1416,6 +1420,7 @@ export function ProjectEditor({
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          reservationId: line.reservationId,
           serviceDate: line.serviceDate,
           serviceName: line.serviceName,
           staffName: line.staffName,

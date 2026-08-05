@@ -78,6 +78,7 @@ export interface UpdateProjectHeaderInput {
 export interface UpdateServiceLineInput {
   projectId: string;
   lineId: string;
+  reservationId?: string;
   serviceDate: string | null;
   serviceName: string;
   staffName: string;
@@ -562,12 +563,26 @@ export async function updateServiceLine(input: UpdateServiceLineInput): Promise<
       ? input.receiptIssuedAt || collectedAt
       : null;
   const sortKey = input.serviceDate ? Number(input.serviceDate.replace(/-/g, '')) : 0;
+  const detail = await getProjectDetail(input.projectId);
+  const resolvedLine =
+    detail.serviceLines.find((line) => line.id === input.lineId) ||
+    (input.reservationId
+      ? detail.serviceLines.find((line) => line.reservationId === input.reservationId)
+      : null) ||
+    (detail.project
+      ? detail.serviceLines.find(
+          (line) =>
+            scopeEntityId(workspaceKey, stableId('line', detail.project!.customerId, line.reservationId)) ===
+            input.lineId
+        )
+      : null);
+  const targetLineId = resolvedLine?.id || input.lineId;
 
   try {
     const db = await getDb();
     const result = await db.query<ServiceLine>(updateServiceLineSql, [
       workspaceKey,
-      input.lineId,
+      targetLineId,
       input.projectId,
       input.serviceDate || '',
       input.serviceName,
@@ -595,7 +610,7 @@ export async function updateServiceLine(input: UpdateServiceLineInput): Promise<
     if (!shouldUseLocalStore(error)) throw error;
     const store = await readLocalStore();
     const line = store.serviceLines.find(
-      (item) => item.id === input.lineId && item.projectId === input.projectId
+      (item) => item.id === targetLineId && item.projectId === input.projectId
     );
     if (!line) return null;
 
