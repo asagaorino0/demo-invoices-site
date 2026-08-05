@@ -32,15 +32,17 @@ export function ImportPanel({
   withinDialog = false,
   initialMode,
   oauthReturnPath,
-  issuerValues
+  issuerValues,
+  requireScopedSetting = false
 }: {
   initialSetting: GoogleSheetSetting | null;
-  settingKey?: string;
+  settingKey?: string | null;
   initialSpreadsheetTitle?: string | null;
   withinDialog?: boolean;
   initialMode?: SourceSheetMode | null;
   oauthReturnPath?: string;
   issuerValues?: KonoyubiIssuerSeed | null;
+  requireScopedSetting?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -75,6 +77,7 @@ export function ImportPanel({
   const shouldShowCurrentSpreadsheet = Boolean(
     setting && spreadsheetHref && initialSpreadsheetTitle && initialSpreadsheetTitle !== '名称未取得'
   );
+  const canPersistSetting = Boolean(settingKey);
 
   useEffect(() => {
     if (pathname !== '/source-sheet') {
@@ -103,6 +106,11 @@ export function ImportPanel({
     setError('');
     setSettingMessage('');
     setSettingError('');
+
+    if (!canPersistSetting) {
+      setSettingError('shopId が未指定のため保存できません。konoyubi から shopId を付けて開き直してください。');
+      return;
+    }
 
     const payload = getExistingSettingPayload();
     if (!payload) {
@@ -179,6 +187,11 @@ export function ImportPanel({
     setSettingMessage('');
     setSettingError('');
 
+    if (!canPersistSetting) {
+      setSettingError('shopId が未指定のため新規作成できません。konoyubi から shopId を付けて開き直してください。');
+      return;
+    }
+
     if (!form.spreadsheetTitle.trim()) {
       setSettingError('新規作成するスプレッドシート名を入力してください。');
       return;
@@ -190,7 +203,7 @@ export function ImportPanel({
     }
 
     const params = new URLSearchParams({
-      settingKey,
+      settingKey: settingKey || DEFAULT_GOOGLE_SHEET_SETTING_KEY,
       spreadsheetTitle: form.spreadsheetTitle,
       // newFolderName: form.newFolderName,
       sheetName: form.sheetName,
@@ -217,6 +230,12 @@ export function ImportPanel({
         </>
       )}
       <p>この画面で利用する共通の source スプレッドシートを設定します。</p>
+
+      {requireScopedSetting && !canPersistSetting ? (
+        <div className="note" style={{ marginTop: 12, background: '#fff0e4', color: '#8a4216' }}>
+          shopId が渡っていないため、この画面では既存設定の読込と保存を停止しています。
+        </div>
+      ) : null}
 
       {shouldShowCurrentSpreadsheet && !(withinDialog && mode === 'existing') ? (
         <div className="note" style={{ marginTop: 16, marginBottom: 0 }}>
@@ -315,13 +334,13 @@ export function ImportPanel({
                 </p>
               </div>
             )}
-            <input
+            {/* <input
               placeholder="シート名"
               value={form.sheetName}
               onChange={(e) => setForm((current) => ({ ...current, sheetName: e.target.value }))}
               disabled={savePending}
               style={inputStyle}
-            />
+            /> */}
             {/* <input
               placeholder="履歴シート名（任意）"
               value={form.historySheetName}

@@ -22,6 +22,7 @@ export function buildSourceSheetSetupUrl(input: BuildSourceSheetSetupUrlInput): 
   }
 
   const issuer = input.issuer || {};
+  appendIfPresent(url, 'shopId', issuer.shopId);
   appendIfPresent(url, 'issuerName', issuer.issuerName);
   appendIfPresent(url, 'issuerPostalCode', issuer.issuerPostalCode);
   appendIfPresent(url, 'issuerAddress', issuer.issuerAddress);

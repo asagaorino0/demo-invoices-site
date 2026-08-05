@@ -5,7 +5,6 @@ import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../types';
 import type { KonoyubiIssuerSeed } from '../../lib/konoyubi/build-source-sheet-auth-url';
 import { getGoogleSpreadsheetTitle } from '../../lib/google-sheets';
 import { resolveTenantIdFromGoogleSheetTarget } from '../../lib/tenant';
-import { buildGoogleSheetSettingKey } from '../../lib/google-sheet-setting-key';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,8 +72,13 @@ export default async function SourceSheetPage({
   }>;
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const settingKey = buildGoogleSheetSettingKey(resolvedSearchParams?.shopId);
-  const initialSetting = await getGoogleSheetSetting(settingKey || DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
+  const requestedShopId = String(resolvedSearchParams?.shopId || '').trim();
+  const issuerValues = readIssuerValues(resolvedSearchParams);
+  const returnTo = normalizeExternalHref(resolvedSearchParams?.returnTo);
+  const isKonoyubiFlow = Boolean(returnTo || issuerValues);
+  const hasScopedShopId = Boolean(requestedShopId);
+  const settingKey = hasScopedShopId || !isKonoyubiFlow ? DEFAULT_GOOGLE_SHEET_SETTING_KEY : null;
+  const initialSetting = settingKey ? await getGoogleSheetSetting(settingKey).catch(() => null) : null;
   const hydratedInitialSetting = initialSetting?.tenantId
     ? initialSetting
     : initialSetting
@@ -96,9 +100,6 @@ export default async function SourceSheetPage({
     }).catch(() => '')
     : '';
   const initialMode = normalizeMode(resolvedSearchParams?.mode);
-  const returnTo = normalizeExternalHref(resolvedSearchParams?.returnTo);
-  const issuerValues = readIssuerValues(resolvedSearchParams);
-
   const oauthReturnPath = buildOauthReturnPath({ returnTo, initialMode, issuerValues });
 
   return (
@@ -137,7 +138,15 @@ export default async function SourceSheetPage({
           initialMode={initialMode}
           oauthReturnPath={oauthReturnPath}
           issuerValues={issuerValues}
+          requireScopedSetting={isKonoyubiFlow}
         />
+
+        {isKonoyubiFlow && !requestedShopId ? (
+          <div className="note" style={{ marginTop: 16, background: '#fff0e4', color: '#8a4216' }}>
+            `konoyubi` から `shopId` が渡されていないため、既存の共有スプレッドシート設定は読み込んでいません。
+            他ユーザーの設定へ誤接続しないよう、この状態では保存も無効化しています。
+          </div>
+        ) : null}
       </section>
 
       {/* <section style={{ marginTop: 18 }}> */}
