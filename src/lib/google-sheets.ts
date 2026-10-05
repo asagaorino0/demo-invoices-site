@@ -179,7 +179,7 @@ const HISTORY_FIELD_LABELS: Partial<Record<keyof InvoiceCsvRow | 'reservationId'
   receiptIssueDate: '領収書発行日',
   remarks: '備考',
   memo: 'メモ',
-  visible: '表示'
+  visible: 'サービス日を表示'
 };
 
 export async function syncProjectToGoogleSheet(

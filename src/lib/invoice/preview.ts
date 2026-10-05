@@ -58,7 +58,7 @@ export function buildDocumentRows(lines: ServiceLine[]): InvoicePreviewRow[] {
   const rows = lines.flatMap((line) => {
     const baseRow: InvoicePreviewRow = {
       key: line.reservationId,
-      label: `${formatShortDate(line.serviceDate)} ${line.serviceName}`.trim(),
+      label: `${line.visible ? formatShortDate(line.serviceDate) : ''} ${line.serviceName}`.trim(),
       qty: `${line.quantity}${line.unit || ''}`,
       unitPrice: line.price,
       total: line.price * line.quantity
@@ -105,7 +105,7 @@ export function buildRemarksText(
 export function getInvoiceLines(lines: ServiceLine[], selectedLineIds: string[]): ServiceLine[] {
   const lineMap = new Map(
     lines
-      .filter((line) => line.collectionStatus === 'uncollected' && line.visible)
+      .filter((line) => line.collectionStatus === 'uncollected')
       .map((line) => [line.id, line])
   );
   return selectedLineIds

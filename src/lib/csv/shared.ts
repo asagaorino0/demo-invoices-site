@@ -47,7 +47,8 @@ const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
   角印x: 'stampOffsetX',
   角印y: 'stampOffsetY',
   備考欄高さ: 'notesBoxHeight',
-  表示: 'visible'
+  表示: 'visible',
+  サービス日を表示: 'visible'
 };
 
 export function normalizeHeader(value: string): string {

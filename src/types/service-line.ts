@@ -21,6 +21,7 @@ export interface ServiceLine {
   extraCharges: ExtraCharge[];
   remarks: string;
   memo: string;
+  /** Whether to show the service date on invoice and receipt rows. */
   visible: boolean;
   collectionStatus: CollectionStatus;
   collectedAt: string | null;

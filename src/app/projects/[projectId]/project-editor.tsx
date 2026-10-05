@@ -2336,7 +2336,7 @@ export function ProjectEditor({
                   checked={lineForm.visible}
                   onChange={(event) => setLineForm((current) => current && ({ ...current, visible: event.target.checked }))}
                 />
-                <span>表示する</span>
+                <span>サービス日を表示</span>
               </label>
               <label>
                 <div>回収状態</div>

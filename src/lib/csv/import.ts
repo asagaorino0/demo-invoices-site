@@ -182,8 +182,8 @@ export function importInvoiceCsvRows(
 
     if (!visible) {
       warnings.push({
-        code: 'row_imported_hidden',
-        message: 'visible=FALSE の行を非表示明細として取り込みました。',
+        code: 'row_imported_date_hidden',
+        message: 'visible=FALSE の行をサービス日非表示の明細として取り込みました。',
         rowNumber
       });
     }
