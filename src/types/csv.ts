@@ -1,4 +1,8 @@
 export interface InvoiceCsvRow {
+  selectedForInvoice?: string;
+  selectionUpdatedAt?: string;
+  projectDefaultRemarks?: string;
+  projectStatus?: string;
   userId: string;
   userName: string;
   subject: string;
@@ -49,6 +53,7 @@ export interface InvoiceImportBundle {
 }
 
 export const INVOICE_CSV_HEADERS: Array<keyof InvoiceCsvRow> = [
+  'selectedForInvoice', 'selectionUpdatedAt', 'projectDefaultRemarks', 'projectStatus',
   'userId',
   'userName',
   'subject',

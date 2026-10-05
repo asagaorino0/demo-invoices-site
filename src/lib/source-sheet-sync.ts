@@ -2,7 +2,6 @@ import { importInvoiceCsvRows, parseInvoiceCsvText } from './csv/import';
 import { getGoogleSheetsErrorStatus, readGoogleSheetCsvText } from './google-sheets';
 import { normalizeCompanyName } from './project-fields';
 import { getGoogleSheetSetting } from './store/google-sheet-settings';
-import { persistImportedBundle } from './store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../types';
 import { getCurrentTenantScopeKey } from './tenant';
 
@@ -41,24 +40,11 @@ export async function syncProjectsFromSourceSheet(): Promise<SyncSourceSheetResu
   const bundle = importInvoiceCsvRows(normalizedRows, { scopeKey });
   const warnings = bundle.warnings;
   const importId = crypto.randomUUID();
-  const replaceCompanyNames = Array.from(
-    new Set(rows.map((row) => String(row.companyName || '').trim()).filter(Boolean))
-  );
-
-  const persisted = await persistImportedBundle({
-    importId,
-    replaceCompanyNames,
-    sourceName: `google-sheet:${sheetResult.spreadsheetId}:${sheetResult.sheetName}`,
-    sourceType: 'csv',
-    rowCount: normalizedRows.length,
-    warnings,
-    projects: bundle.projects,
-    serviceLines: bundle.serviceLines,
-    invoiceSelections: bundle.invoiceSelections
-  });
-
   return {
-    ...persisted,
+    importId,
+    projectCount: bundle.projects.length,
+    lineCount: bundle.serviceLines.length,
+    selectionCount: bundle.invoiceSelections.length,
     warnings,
     sheetName: sheetResult.sheetName,
     spreadsheetId: sheetResult.spreadsheetId

@@ -1,10 +1,8 @@
 import {
   deleteServiceLine,
   duplicateServiceLine,
-  updateServiceLine,
-  upsertProjectDetailSnapshot
+  updateServiceLine
 } from '../../../../../../lib/store/projects';
-import { readSourceSheetViewData } from '../../../../../../lib/source-sheet-view';
 import { validateServiceLineInput } from '../../../../../../lib/validation';
 
 export async function PATCH(
@@ -56,21 +54,7 @@ export async function PATCH(
       );
     }
 
-    let line = await updateServiceLine(input);
-
-    if (!line) {
-      const sourceView = await readSourceSheetViewData().catch(() => null);
-      const sourceBundle = sourceView?.detailsByProjectId.get(projectId) || null;
-
-      if (sourceBundle?.project) {
-        await upsertProjectDetailSnapshot({
-          project: sourceBundle.project,
-          serviceLines: sourceBundle.serviceLines,
-          invoiceSelections: sourceBundle.invoiceSelections
-        }).catch(() => undefined);
-        line = await updateServiceLine(input);
-      }
-    }
+    const line = await updateServiceLine(input);
 
     if (!line) {
       return Response.json(

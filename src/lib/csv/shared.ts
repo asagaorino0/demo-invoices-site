@@ -1,6 +1,10 @@
 import type { ExtraCharge, InvoiceCsvRow } from '../../types';
 
 const HEADER_ALIASES: Record<string, keyof InvoiceCsvRow> = {
+  selectedforinvoice: 'selectedForInvoice',
+  selectionupdatedat: 'selectionUpdatedAt',
+  projectdefaultremarks: 'projectDefaultRemarks',
+  projectstatus: 'projectStatus',
   userid: 'userId',
   username: 'userName',
   subject: 'subject',

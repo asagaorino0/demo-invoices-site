@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { listProjectSummaries, getProjectDetail, upsertProjectDetailSnapshot } from '../../lib/store/projects';
+import { listProjectSummaries, getProjectDetail } from '../../lib/store/projects';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY, getProjectStatusLabel, type ProjectSummary } from '../../types';
 import { ProjectEditor } from './[projectId]/project-editor';
 import { loadBaseSiteConfig, loadIssuerSheetOverridesWithStatus, loadSiteConfig } from '../../lib/site-config';
@@ -62,7 +62,7 @@ export default async function ProjectsPage({
     resolvedSearchParams?.projectId || allCustomerGroups[0]?.project.id || projects[0]?.id || '';
   const selectedContextGroup =
     allCustomerGroups.find((group) => group.project.id === selectedContextProjectId) || null;
-  const selectedContextBundle = selectedContextProjectId
+  const selectedContextBundle = !hydratedGoogleSheetSetting && selectedContextProjectId
     ? await getProjectDetail(selectedContextProjectId).catch(() => ({
       project: null,
       serviceLines: [],
@@ -122,14 +122,6 @@ export default async function ProjectsPage({
       ? selectedContextBundle
       : null;
 
-  if (hasSourceSpreadsheetSetting && selectedBundle?.project) {
-    await upsertProjectDetailSnapshot({
-      project: selectedBundle.project,
-      serviceLines: selectedBundle.serviceLines,
-      invoiceSelections: selectedBundle.invoiceSelections
-    }).catch(() => undefined);
-  }
-
   const selectedCustomerGroup = hasSourceSpreadsheetSetting
     ? customerGroups.find((group) => group.project.id === activeProjectId) || null
     : manualProjectCanOpen
@@ -170,7 +162,7 @@ export default async function ProjectsPage({
 
       {loadError ? (
         <div className="note" style={{ marginTop: 24, background: '#f7dfd7', color: '#7a2f1b' }}>
-          DB から案件一覧を取得できませんでした。<br />
+          案件データの読み込み・保存に失敗しました。<br />
           <code>{loadError}</code>
         </div>
       ) : null}

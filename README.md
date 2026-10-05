@@ -69,7 +69,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/api/google/callback
 - 利用者ごと、会社名ごと、ショップごとに source スプレッドシートが切り替わる挙動ではありません
 - 左上の `Source スプレッドシート` カードで設定した内容が、この画面の取込元と保存先になります
 
-PostgreSQL を併用する場合だけ、追加で次を設定します。
+source スプレッドシートを設定した運用では、本番でも PostgreSQL は不要です。案件の編集・回収状態・請求対象の選択・並び順はスプレッドシートへ直接保存します。スプレッドシートを設定しない旧 DB 運用の場合だけ、次を設定します。
 
 ```env
 DATABASE_URL=postgresql://USERNAME:PASSWORD@HOST:5432/konoyubi_invoices?sslmode=require
@@ -126,22 +126,17 @@ OAuth 公開審査を軽くするため、新規作成フローの Drive 権限�
 psql "$DATABASE_URL" -f db/schema.sql
 ```
 
-DB を使わない運用なら、この手順はスキップできます。
+スプレッドシート運用の場合、この手順は不要です。
 
-### 将来の DB 移行について
+### スプレッドシートへの保存
 
-現在は、Google Sheets を正本にしつつ、環境によってはローカル保存で運用できます。
-
-- 1 台中心の試験運用では、DB なしでも進められます
-- 複数 PC で選択状態や並び順を共有したくなったタイミングで、PostgreSQL へ移行する想定です
-- PostgreSQL を使う場合、選択状態や請求対象の並び順は DB 側で共有されます
-
-移行の大まかな流れ:
-
-1. Azure Database for PostgreSQL などの PostgreSQL 接続先を用意する
-2. `.env.local` の `DATABASE_URL` を実値へ差し替える
-3. `db/schema.sql` を適用する
-4. 必要に応じて `.demo-invoices-local-store.json` の内容を DB へ移行する
+- source 設定済みなら、画面表示・保存 API とも同じスプレッドシートを参照し、案件の DB キャッシュは使いません
+- 編集・回収状態・領収日・請求対象の選択は各保存操作で反映します
+- `selectedForInvoice`・`selectionUpdatedAt`・`projectDefaultRemarks`・`projectStatus` 列は初回保存時に自動追加します。既存データを手動移行する必要はありません
+- シート再読込は読み取りのみで、DB への取込は行いません
+- CSV / Excel の取込は、source 設定済みならファイル内の利用者をシートへ保存します。ファイルにない利用者は残します
+- シートへの書き込みに失敗した場合は保存エラーを表示します。ローカルファイルへの切り替えで成功扱いにはしません
+- 接続先の設定保存には従来どおり Firestore を使用できます。案件データの保存先はスプレッドシートです
 
 詳細な注意点や作業メモは [AGENT.md](/Users/eriko/dev/prj/demo-invoices/AGENT.md:1) を参照してください。
 
@@ -255,7 +250,7 @@ npm run dev
 
 ## 実装メモ
 
-- DB は正本ではなく中間保存
+- source 設定済みの運用は、案件の読み書きに DB を使用しません
 - 正本は CSV / スプレッドシート側に置く前提
 - 今回の構成は「差し込み印刷 + 編集ワークベンチ」を最小単位で切り出したもの
 - Excel 取込は引き続き利用できます。お客様要望で Excel を使う場合は、取込後に CSV 書き出しか Google Sheets 保存を選べます

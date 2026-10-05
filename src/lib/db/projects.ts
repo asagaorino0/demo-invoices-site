@@ -9,6 +9,7 @@ import {
 } from '../local-store';
 import { stableId } from '../csv/shared';
 import { getDb, withTransaction } from './client';
+import { shouldUseLocalProjectStore as shouldUseLocalStore } from './project-storage-error';
 import {
   deleteServiceLineSql,
   insertExportJobSql,
@@ -1248,17 +1249,6 @@ export async function upsertProjectDetailSnapshot(input: {
     serviceLines,
     invoiceSelections
   };
-}
-
-function shouldUseLocalStore(error: unknown): boolean {
-  const message = String(error || '');
-  return (
-    message.includes('PostgreSQL client is not ready') ||
-    message.includes('DATABASE_URL is not configured') ||
-    message.includes('ENOTFOUND') ||
-    message.includes('ECONNREFUSED') ||
-    message.includes('getaddrinfo')
-  );
 }
 
 export async function loadSelectionsForCustomers(customerIds: string[]): Promise<InvoiceSelection[]> {

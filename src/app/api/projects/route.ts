@@ -1,4 +1,4 @@
-import { createProject, listProjectSummaries, markProjectAsExported, upsertProjectSnapshot } from '../../../lib/store/projects';
+import { createProject, listProjectSummaries } from '../../../lib/store/projects';
 import { normalizeCompanyName } from '../../../lib/project-fields';
 import { validateProjectInput } from '../../../lib/validation';
 import { getGoogleSheetSetting } from '../../../lib/store/google-sheet-settings';
@@ -74,7 +74,7 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY).catch(() => null);
+    const setting = await getGoogleSheetSetting(DEFAULT_GOOGLE_SHEET_SETTING_KEY);
     const sourceSheetCustomerId = setting
       ? await generateCustomerIdFromSourceSheet({
           spreadsheetId: setting.spreadsheetId,
@@ -91,7 +91,7 @@ export async function POST(request: Request): Promise<Response> {
           customerId: sourceSheetCustomerId || ''
         }, scopeKey);
         const result = await syncProjectToGoogleSheet({
-          project,
+          project: { ...project, status: 'exported' },
           serviceLines: [],
           invoiceSelections: [],
           target: {
@@ -100,11 +100,6 @@ export async function POST(request: Request): Promise<Response> {
             historySheetName: setting.historySheetName
           }
         });
-        await upsertProjectSnapshot({
-          ...project,
-          status: 'exported'
-        });
-        await markProjectAsExported(project.id).catch(() => undefined);
         const sheetSync = {
           ok: true,
           spreadsheetId: result.spreadsheetId,

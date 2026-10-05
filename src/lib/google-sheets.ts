@@ -40,6 +40,7 @@ export interface SyncProjectToGoogleSheetInput {
   serviceLines: ServiceLine[];
   invoiceSelections: InvoiceSelection[];
   target: GoogleSheetTarget;
+  previous?: { project: Project; serviceLines: ServiceLine[]; invoiceSelections: InvoiceSelection[] };
 }
 
 export interface SyncProjectToGoogleSheetResult {
@@ -200,31 +201,8 @@ export async function syncProjectToGoogleSheet(
   const currentCustomerRows = existingValues
     .slice(1)
     .filter((row) => String(row[userIdIndex] || '').trim() === input.project.customerId);
-  const existingDataRows = existingValues
-    .slice(1)
-    .filter((row) => String(row[userIdIndex] || '').trim() !== input.project.customerId);
-  const selectedReservationIds = new Set(
-    input.invoiceSelections
-      .filter((selection) => selection.selectedForInvoice)
-      .map((selection) => input.serviceLines.find((line) => line.id === selection.lineId)?.reservationId || '')
-      .filter(Boolean)
-  );
-  const currentCustomerRowMap = buildReservationRowMap(headerKeys, currentCustomerRows);
-  const exportedRows = exportInvoiceCsvRows({
-    projects: [input.project],
-    serviceLines: input.serviceLines,
-    invoiceSelections: input.invoiceSelections
-  }).map((row) => {
-    if (selectedReservationIds.has(row.reservationId)) {
-      return row;
-    }
-
-    const existingRow = currentCustomerRowMap.get(row.reservationId);
-    return {
-      ...row,
-      subject: existingRow?.subject || row.subject
-    };
-  });
+  const exportedRows = buildProjectSheetRows(input);
+  const previousRows = input.previous ? new Map(buildProjectSheetRows(input.previous).map((row) => [row.reservationId, row])) : null;
   const historyRecords = buildHistoryRecords({
     config,
     project: input.project,
@@ -232,25 +210,60 @@ export async function syncProjectToGoogleSheet(
     previousRows: currentCustomerRows,
     nextRows: exportedRows.map((row) => mapCsvRowToSheetRow(row, headerKeys))
   });
-  const nextValues = [
-    headerLabels,
-    ...existingDataRows,
-    ...exportedRows.map((row) => mapCsvRowToSheetRow(row, headerKeys))
-  ];
-
-  await clearSheetValues({
-    accessToken,
-    spreadsheetId: config.spreadsheetId,
-    range,
-    clientEmail: config.clientEmail
-  });
-  await updateSheetValues({
-    accessToken,
-    spreadsheetId: config.spreadsheetId,
-    range: `${toSheetRangePrefix(config.sheetName)}!A1`,
-    values: nextValues,
-    clientEmail: config.clientEmail
-  });
+  const reservationIndex = headerKeys.indexOf('reservationId');
+  const existingByReservation = new Map(existingValues.flatMap((row, index) =>
+    index > 0 && String(row[userIdIndex] || '').trim() === input.project.customerId
+      ? [[String(row[reservationIndex] || ''), { row, rowNumber: index + 1 }] as const] : []
+  ));
+  const data: Array<{ range: string; values: Array<Array<string | null>> }> = [];
+  if (JSON.stringify(headerLabels) !== JSON.stringify(existingValues[0] || [])) {
+    data.push({ range: `${toSheetRangePrefix(config.sheetName)}!A1`, values: [headerLabels] });
+  }
+  const externalColumns = new Set(['outsourceUnitPrice', 'outsourceUnitQuantity', 'outsourceUnit', 'outsourceUnitExtraCharges']);
+  const extraRows: string[][] = [];
+  for (const row of exportedRows) {
+    const existing = existingByReservation.get(row.reservationId);
+    if (!existing) {
+      extraRows.push(mapCsvRowToSheetRow(row, headerKeys));
+      continue;
+    }
+    const previous = previousRows?.get(row.reservationId);
+    const values = headerKeys.map((key, index) => {
+      // null leaves the cell (including formulas and external columns) untouched.
+      if (!(key in row) || externalColumns.has(key)) return null;
+      const field = key as keyof InvoiceCsvRow;
+      if (previous && row[field] === previous[field] && existing.row[index] !== undefined &&
+          (existing.row[index] !== '' || row[field] === '')) return null;
+      return String(row[field] ?? '');
+    });
+    if (values.some((value) => value !== null)) {
+      data.push({ range: `${toSheetRangePrefix(config.sheetName)}!A${existing.rowNumber}`, values: [values] });
+    }
+    existingByReservation.delete(row.reservationId);
+  }
+  for (const [reservationId, { rowNumber }] of existingByReservation) {
+    if (previousRows && !previousRows.has(reservationId)) continue;
+    data.push({ range: `${toSheetRangePrefix(config.sheetName)}!A${rowNumber}`, values: [headerLabels.map(() => '')] });
+  }
+  // Extra rows are appended with the Sheets API so concurrent customers do not
+  // select the same empty row. Existing rows are never cleared before writing.
+  if (data.length) {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(config.spreadsheetId)}/values:batchUpdate`,
+      {
+        method: 'POST',
+        headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ valueInputOption: 'RAW', data })
+      }
+    );
+    if (!response.ok) {
+      throw buildGoogleSheetsApiError('Google Sheets の更新に失敗しました。', response.status, await response.text(), config.clientEmail);
+    }
+  }
+  if (extraRows.length) {
+    await appendSheetValues({ accessToken, spreadsheetId: config.spreadsheetId,
+      range, values: extraRows, clientEmail: config.clientEmail });
+  }
   await appendHistoryRecords({
     accessToken,
     config,
@@ -262,6 +275,28 @@ export async function syncProjectToGoogleSheet(
     sheetName: config.sheetName,
     rowCount: exportedRows.length
   };
+}
+
+export function buildProjectSheetRows(input: {
+  project: Project; serviceLines: ServiceLine[]; invoiceSelections: InvoiceSelection[];
+}): InvoiceCsvRow[] {
+  const selectionsByLineId = new Map(input.invoiceSelections.map((selection) => [selection.lineId, selection]));
+  const linesByReservationId = new Map(input.serviceLines.map((line) => [line.reservationId, line]));
+  return exportInvoiceCsvRows({
+    projects: [input.project],
+    serviceLines: input.serviceLines,
+    invoiceSelections: input.invoiceSelections
+  }).map((row) => {
+    const line = linesByReservationId.get(row.reservationId);
+    const selection = line ? selectionsByLineId.get(line.id) : undefined;
+    return {
+      ...row,
+      selectedForInvoice: selection?.selectedForInvoice ? 'TRUE' : 'FALSE',
+      selectionUpdatedAt: selection?.updatedAt || '',
+      projectDefaultRemarks: input.project.defaultRemarks,
+      projectStatus: input.project.status
+    };
+  });
 }
 
 export async function readGoogleSheetValues(target: GoogleSheetTarget): Promise<ReadGoogleSheetResult> {
@@ -1056,6 +1091,7 @@ function buildHeaderLabels(values: string[]): string[] {
   const headerKeys = headerLabels.map((value) => normalizeHeader(value));
   const missingHeaders = INVOICE_CSV_HEADERS.filter((header) => !headerKeys.includes(header));
   const optionalHeaders = new Set<keyof InvoiceCsvRow>([
+    'selectedForInvoice', 'selectionUpdatedAt', 'projectDefaultRemarks', 'projectStatus',
     'subject',
     'issuerBoxOffsetX',
     'issuerBoxOffsetY',

@@ -319,6 +319,28 @@ export function importInvoiceCsvRows(
 
   const invoiceSelections = buildSelections(Array.from(projectMap.values()), serviceLines, now);
 
+  // Optional workbench columns preserve edits across requests without a database.
+  const rawByLineId = new Map(rows.map((row) => [
+    buildScopedId(scopeKey, stableId('line', readString(row.userId), readString(row.reservationId))), row
+  ]));
+  for (const selection of invoiceSelections) {
+    const row = rawByLineId.get(selection.lineId);
+    const line = serviceLines.find((item) => item.id === selection.lineId);
+    if (row && readString(row.selectedForInvoice)) {
+      selection.selectedForInvoice = parseBoolean(row.selectedForInvoice) && line?.collectionStatus === 'uncollected';
+    }
+    if (row && readString(row.selectionUpdatedAt)) {
+      selection.updatedAt = readString(row.selectionUpdatedAt);
+    }
+  }
+  for (const row of rows) {
+    const project = projectMap.get(buildScopedId(scopeKey, stableId('project', readString(row.userId))));
+    if (!project) continue;
+    if (row.projectDefaultRemarks !== undefined) project.defaultRemarks = readString(row.projectDefaultRemarks);
+    const status = readString(row.projectStatus);
+    if (status === 'draft' || status === 'ready_for_export' || status === 'exported') project.status = status;
+  }
+
   return {
     projects: Array.from(projectMap.values()).sort(compareProjects),
     serviceLines,

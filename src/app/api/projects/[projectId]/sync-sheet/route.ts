@@ -1,4 +1,4 @@
-import { getProjectExportBundle, markProjectAsExported } from '../../../../../lib/store/projects';
+import { getProjectExportBundle } from '../../../../../lib/store/projects';
 import { getGoogleSheetsErrorStatus, syncProjectToGoogleSheet } from '../../../../../lib/google-sheets';
 import { getGoogleSheetSetting } from '../../../../../lib/store/google-sheet-settings';
 import { DEFAULT_GOOGLE_SHEET_SETTING_KEY } from '../../../../../types';
@@ -33,7 +33,7 @@ export async function POST(
     }
 
     const result = await syncProjectToGoogleSheet({
-      project: bundle.project,
+      project: { ...bundle.project, status: 'exported' },
       serviceLines: bundle.serviceLines,
       invoiceSelections: bundle.invoiceSelections,
       target: {
@@ -42,8 +42,6 @@ export async function POST(
         historySheetName: setting.historySheetName
       }
     });
-
-    await markProjectAsExported(projectId);
 
     return Response.json({
       ok: true,

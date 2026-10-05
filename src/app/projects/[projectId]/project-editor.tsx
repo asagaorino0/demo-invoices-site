@@ -1155,9 +1155,9 @@ export function ProjectEditor({
       return false;
     }
 
-    const responses = await Promise.all(
-      receiptContextLines.map((line) =>
-        fetch(buildProjectLineApiPath(project.id, line.id), {
+    const responses: Response[] = [];
+    for (const line of receiptContextLines) {
+      const response = await fetch(buildProjectLineApiPath(project.id, line.id), {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -1176,9 +1176,10 @@ export function ProjectEditor({
             collectedAt: line.collectedAt || receiptDate,
             receiptIssuedAt: receiptDate
           })
-        })
-      )
-    );
+        });
+      responses.push(response);
+      if (!response.ok) break;
+    }
 
     const failed = responses.find((response) => !response.ok);
     if (failed) {

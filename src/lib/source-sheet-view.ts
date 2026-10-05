@@ -1,9 +1,5 @@
 import type { InvoiceSelection, ProjectSummary, ServiceLine } from '../types';
-import {
-  loadSelectionsForCustomers,
-  loadServiceLineIdentitiesForCustomers,
-  type ProjectDetailBundle
-} from './db/projects';
+import type { ProjectDetailBundle } from './db/projects';
 import { parseInvoiceCsvText, importInvoiceCsvRows } from './csv/import';
 import { readGoogleSheetCsvText } from './google-sheets';
 import { normalizeCompanyName } from './project-fields';
@@ -38,36 +34,15 @@ export async function readSourceSheetViewData(): Promise<SourceSheetViewData> {
     })
   }));
   const bundle = importInvoiceCsvRows(normalizedRows, { scopeKey });
-  const customerIdByProjectId = new Map(bundle.projects.map((project) => [project.id, project.customerId]));
-  const serviceLineIdentities = await loadServiceLineIdentitiesForCustomers(
-    bundle.projects.map((project) => project.customerId)
-  );
-  const dbLineIdByCustomerAndReservation = new Map(
-    serviceLineIdentities.map((row) => [`${row.customerId}::${row.reservationId}`, row.lineId])
-  );
-  const remappedServiceLines = bundle.serviceLines.map((line) => {
-    const customerId = customerIdByProjectId.get(line.projectId) || '';
-    const dbLineId = dbLineIdByCustomerAndReservation.get(`${customerId}::${line.reservationId}`);
-    return dbLineId ? { ...line, id: dbLineId } : line;
-  });
-  const preservedSelections = await loadSelectionsForCustomers(bundle.projects.map((project) => project.customerId));
-  const remappedSelections = bundle.invoiceSelections.map((selection) => {
-    const sourceLine = bundle.serviceLines.find((line) => line.id === selection.lineId);
-    if (!sourceLine) {
-      return selection;
-    }
-    const customerId = customerIdByProjectId.get(sourceLine.projectId) || '';
-    const dbLineId = dbLineIdByCustomerAndReservation.get(`${customerId}::${sourceLine.reservationId}`);
-    return dbLineId ? { ...selection, lineId: dbLineId } : selection;
-  });
-  const mergedSelections = mergeSelections(remappedSelections, preservedSelections, remappedServiceLines);
+  const allServiceLines = bundle.serviceLines;
+  const allSelections = bundle.invoiceSelections;
 
   const detailsByProjectId = new Map<string, ProjectDetailBundle>();
   for (const project of bundle.projects) {
-    const serviceLines = remappedServiceLines
+    const serviceLines = allServiceLines
       .filter((line) => line.projectId === project.id)
       .sort((a, b) => (b.sortKey || 0) - (a.sortKey || 0));
-    const invoiceSelections = mergedSelections
+    const invoiceSelections = allSelections
       .filter((selection) => selection.projectId === project.id)
       .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.lineId.localeCompare(b.lineId, 'ja'));
 
@@ -79,7 +54,7 @@ export async function readSourceSheetViewData(): Promise<SourceSheetViewData> {
   }
 
   return {
-    summaries: buildProjectSummariesFromBundle(bundle.projects, remappedServiceLines, mergedSelections),
+    summaries: buildProjectSummariesFromBundle(bundle.projects, allServiceLines, allSelections),
     detailsByProjectId
   };
 }
@@ -112,31 +87,4 @@ function buildProjectSummariesFromBundle(
       };
     })
     .sort((a, b) => a.customerName.localeCompare(b.customerName, 'ja'));
-}
-
-function mergeSelections(
-  importedSelections: InvoiceSelection[],
-  preservedSelections: InvoiceSelection[],
-  serviceLines: ServiceLine[]
-): InvoiceSelection[] {
-  const preservedByLineId = new Map(preservedSelections.map((selection) => [selection.lineId, selection]));
-  const lineById = new Map(serviceLines.map((line) => [line.id, line]));
-
-  return importedSelections.map((selection) => {
-    const preserved = preservedByLineId.get(selection.lineId);
-    const line = lineById.get(selection.lineId);
-
-    if (!preserved || !line) {
-      return selection;
-    }
-
-    return {
-      ...selection,
-      projectId: selection.projectId,
-      lineId: selection.lineId,
-      selectedForInvoice: line.collectionStatus === 'uncollected' ? preserved.selectedForInvoice : false,
-      selectionBatchKey: preserved.selectionBatchKey || selection.selectionBatchKey,
-      updatedAt: preserved.updatedAt || selection.updatedAt
-    };
-  });
 }
